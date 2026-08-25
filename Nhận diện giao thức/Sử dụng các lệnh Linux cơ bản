@@ -1,0 +1,95 @@
+1. `ls` — Liệt kê: "Cho tôi xem trong này có gì"
+ls                 # Liệt kê các tệp trong thư mục hiện tại
+ls -l              # Hiển thị chi tiết: quyền truy cập, chủ sở hữu, kích thước, ngày tháng
+ls -a              # Hiển thị các tệp ẩn (tên bắt đầu bằng dấu chấm)
+ls -la             # Kết hợp: hiển thị chi tiết + tệp ẩn
+ls -lh             # Hiển thị kích thước dễ đọc (KB, MB thay vì byte)
+ls /var/log        # Liệt kê nội dung một thư mục cụ thể mà không cần di chuyển đến đó
+
+Bảng giải mã các cột quan trọng:
+
+Phần	        Ví dụ 	            Ý nghĩa
+Ký tự đầu	     - hoặc d	         - là tệp thường, d là thư mục (directory), l là liên kết (link)
+9 ký tự quyền	 rw-r--r--	       Quyền cho owner / group / others (học kỹ ở mục 4)
+Chủ sở hữu	    kali kali	       Tên owner và group của tệp
+Kích thước	    1420	           Số byte (dùng -h để thấy KB/MB)
+Tên	             secret.txt	     Tên tệp/thư mục
+
+💡 Với dân bảo mật, ls -la là phản xạ đầu tiên khi vào một thư mục lạ: 
+tệp ẩn (bắt đầu bằng ., ví dụ .bash_history, .ssh) thường chứa manh mối “vàng” mà người thường không thấy.
+
+2. `cd` và `pwd` — Di chuyển và định vị
+Analogy: Nếu cây thư mục Linux là một tòa nhà nhiều tầng, thì cd (change directory) là thang máy đưa bạn tới tầng khác, 
+còn pwd (print working directory) là dòng chữ “Bạn đang ở đây” trên bản đồ trung tâm thương mại.
+
+pwd                # Print the current directory path, e.g. /home/kali
+cd /var/log        # Go to an absolute path (starts with /)
+cd Documents       # Go to a subfolder using a relative path
+cd ..              # Go up one level to the parent directory
+cd ~               # Go to your home directory (~ means /home/<user>)
+cd -               # Jump back to the previous directory
+
+Ký hiệu	Nghĩa
+/	Gốc của toàn hệ thống (root)
+~	Thư mục home của bạn
+.	Thư mục hiện tại
+..	Thư mục cha (lùi một cấp)
+
+3. `grep` — Kính lúp tìm mẫu văn bản
+
+Đây là ngôi sao của bài học đối với dân an ninh mạng. Analogy: bạn có một cuốn nhật ký 50.000 dòng và cần tìm mọi lần ai đó nhắc tên “admin” — đọc tay thì mù mắt, còn grep làm việc đó trong nháy mắt. 
+grep (global regular expression print) lọc ra những dòng khớp với mẫu bạn đưa vào.
+grep "failed" auth.log            # Print lines containing "failed"
+grep -i "error" server.log        # Case-insensitive search
+grep -r "password" /etc/          # Recursive: search inside subfolders
+grep -n "root" /etc/passwd        # Show line numbers of matches
+grep -v "healthcheck" access.log  # Invert: lines that do NOT match
+grep -c "404" access.log          # Count matching lines instead of printing
+
+Sức mạnh thật sự lộ ra khi kết hợp với pipe (|) — lấy đầu ra của lệnh này làm đầu vào cho grep:
+# Find every failed SSH login attempt and count them
+cat /var/log/auth.log | grep "Failed password" | wc -l
+
+# List processes and filter only the ones named nginx
+ps aux | grep nginx
+
+Cờ	Công dụng	Tình huống bảo mật
+-i	Bỏ qua hoa/thường	Tìm “ERROR”, “Error”, “error” cùng lúc
+-r	Tìm đệ quy trong thư mục	Quét toàn bộ mã nguồn tìm chuỗi bí mật bị lộ
+-n	Hiện số dòng	Chỉ đúng vị trí trong file log dài
+-v	Đảo ngược	Bỏ log rác để thấy dòng bất thường
+-c	Đếm số dòng khớp	Đo mức độ tấn công brute-force
+
+4. `chmod` — Ai được làm gì với tệp?
+Analogy: mỗi tệp trong Linux như một căn phòng có ba loại chìa khóa — một cho chủ nhà (owner), một cho gia đình (group), một cho khách vãng lai (others). Mỗi chìa lại mở được ba mức: đọc ®, ghi (w), thực thi (x). chmod (change mode) là thợ khóa cho phép bạn cấp hoặc thu các chìa đó.
+
+Sơ đồ mô hình quyền (đọc kỹ nhãn tiếng Việt):
+
+   Chủ sở hữu   Nhóm        Người khác
+   (owner)      (group)     (others)
+   r  w  x      r  w  x      r  w  x
+   │  │  │      │  │  │      │  │  │
+   4  2  1      4  2  1      4  2  1   ← giá trị số của mỗi quyền
+Mỗi nhóm cộng ba số lại thành một chữ số (0–7). Đây là ý nghĩa các số quen thuộc:
+
+Số	Quyền	rwx	Thường dùng cho
+7	đọc + ghi + thực thi	rwx	Chủ sở hữu của script
+6	đọc + ghi	rw-	Tệp dữ liệu chủ được sửa
+5	đọc + thực thi	r-x	Người khác chạy được nhưng không sửa
+4	chỉ đọc	r–	Tệp cấu hình chỉ được xem
+0	không quyền	—	Khóa hoàn toàn với nhóm đó
+
+chmod 755 script.sh    # owner=rwx, group=r-x, others=r-x (typical for a program)
+chmod 644 notes.txt    # owner=rw-, group=r--, others=r-- (typical data file)
+chmod 600 id_rsa       # owner=rw-, group=---, others=--- (private SSH key!)
+chmod +x deploy.sh     # Add execute permission for everyone (symbolic mode)
+chmod u+x,go-w app     # owner +execute, group/others -write (symbolic mode)
+Vậy chmod 755 file nghĩa là gì? 7 = owner có đọc + ghi + thực thi; 5 = group có đọc + thực thi; 5 = others có đọc + thực thi. 
+Ghi lại đúng câu này vì nó xuất hiện trong quiz nhé! ✅
+
+⚠️ Đây là điểm sống còn về bảo mật: khóa SSH riêng (id_rsa) bắt buộc phải là 600. Nếu để 644 (người khác đọc được), OpenSSH sẽ từ chối dùng nó và cảnh báo. 
+Cấp quyền 777 (mọi người làm mọi thứ) cho một thư mục web là “trải thảm đỏ” mời kẻ tấn công tải mã độc lên — đừng bao giờ làm vậy trên server thật.
+
+
+
+
