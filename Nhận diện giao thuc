@@ -1,0 +1,129 @@
+1. Mạng nói chuyện theo tầng: mô hình TCP/IP
+
+Trước khi soi từng giao thức, hãy hiểu chúng “xếp chồng” lên nhau thế nào. Nghĩ tới việc gửi quà qua bưu điện: bạn gói món quà (dữ liệu), bỏ vào hộp ghi địa chỉ nhà (IP), giao cho công ty vận chuyển đảm bảo giao đúng và đủ (TCP), rồi xe tải chở đi trên đường (tầng vật lý). Mỗi lớp lo một việc, không quan tâm lớp khác làm gì.
+Mô hình TCP/IP có 4 tầng:
+
+Tầng	Tên	Nhiệm vụ	Giao thức tiêu biểu
+4	Ứng dụng	“Nội dung” user quan tâm	HTTP, HTTPS, DNS, FTP, SSH
+3	Giao vận	Đóng gói, đánh số, đảm bảo giao nhận	TCP, UDP
+2	Internet	Định tuyến gói qua địa chỉ	IP, ICMP
+1	Truy cập mạng	Truyền bit trên dây/sóng	Ethernet, Wi-Fi
+
+Trong Wireshark, một gói tin được “bóc” theo đúng thứ tự này. Ví dụ một gói HTTP hiện lồng nhau:
+Frame  -> Ethernet (Link: MAC nguồn/đích)
+          -> IP (Internet: 192.168.1.5 -> 1.1.1.1)
+             -> TCP (Giao vận: cổng 54321 -> 80)
+                -> HTTP (Ứng dụng: GET /index.html)
+2. Số cổng — "biển số nhà" của giao thức
+
+Cổng	Giao thức	Giao vận	Ghi chú
+80	  HTTP	       TCP	Web plaintext (đọc được)
+443	  HTTPS	     TCP	  Web mã hóa (TLS)
+53	  DNS	    UDP / TCP	Phân giải tên miền
+22	  SSH	       TCP	Đăng nhập từ xa mã hóa
+21	  FTP	       TCP	Truyền file (plaintext)
+67/68	DHCP	     UDP	Cấp IP tự động
+23	  Telnet	   TCP	Từ xa plaintext (nguy hiểm)
+⚠️ Cảnh báo: Số cổng chỉ là quy ước, không phải luật vật lý. 
+Kẻ tấn công có thể giấu C2 (command-and-control) trên cổng 53 để giả dạng DNS. 
+Vì vậy nhìn cổng là manh mối đầu tiên, không phải bằng chứng cuối cùng — luôn kiểm tra thêm nội dung gói.
+
+3. HTTP vs HTTPS — nhìn phát biết ngay
+HTTP = bưu thiếp: ai cầm trên đường cũng đọc được nội dung. Chạy cổng 80, không mã hóa.
+HTTPS = thư niêm phong trong két sắt: người đưa thư biết gửi cho ai nhưng không đọc được ruột. 
+Chạy cổng 443, mã hóa bằng TLS.
+Trong Wireshark, HTTP lộ liễu đến mức bạn đọc được cả câu:
+
+GET /index.html HTTP/1.1
+Host: example.com
+User-Agent: Mozilla/5.0
+Accept: text/html
+
+Thấy dòng bắt đầu bằng GET, POST, HTTP/1.1 gửi tới cổng 80? Chắc chắn 100% đó là HTTP. 
+Đây chính xác là tình huống Q1 trong quiz: gói tới cổng 80, dữ liệu mở đầu GET /index.html HTTP/1.1 → giao thức tầng ứng dụng là HTTP (không phải HTTPS, vì HTTPS thì bạn chỉ thấy một mớ byte mã hóa vô nghĩa).
+
+⚠️ Đập tan lầm tưởng (đúng như Q4): “HTTPS dùng cổng 80 để mã hóa” là SAI. HTTPS dùng cổng 443. 
+Cổng 80 dành cho HTTP không mã hóa. Nếu ai đó nói HTTPS mã hóa dữ liệu trên cổng 80 → sai hoàn toàn.
+
+# Display filter Wireshark để lọc web
+http                 # chỉ hiện HTTP (thấy được nội dung)
+tcp.port == 443      # lưu lượng HTTPS (chỉ thấy TLS handshake + byte mã hóa)
+tls.handshake        # bắt riêng bước bắt tay TLS của HTTPS
+
+4. DNS — danh bạ điện thoại của Internet
+Đọc
+Khi gõ google.com, máy tính không hiểu tên chữ — nó cần địa chỉ IP dạng số. DNS chính là tổng đài danh bạ: bạn hỏi “google.com có số nhà bao nhiêu?”, DNS trả lời “142.250.x.x”. 
+DNS chạy trên cổng 53, chủ yếu dùng UDP (hỏi–đáp nhanh gọn, một gói đi một gói về, không cần bắt tay phức tạp như TCP).
+
+Đây chính là Q3 trong quiz: bộ lọc udp.port == 53 nghĩa là bạn đang soi lưu lượng DNS (không phải DHCP, 
+HTTP hay SSH — những cái đó cổng khác).
+
+# Các display filter DNS hữu ích
+dns                          # tất cả gói DNS
+udp.port == 53               # lọc theo cổng 53/UDP (đa số DNS)
+dns.qry.name == "google.com" # chỉ truy vấn cho tên miền cụ thể
+dns.flags.response == 1      # chỉ các gói trả lời (response)
+Một gói DNS query điển hình trong Wireshark trông như:
+
+Domain Name System (query)
+    Queries:
+        google.com: type A, class IN   # type A = ask for IPv4 address
+💡 Mẹo điều tra: DNS là “kênh rò rỉ” ưa thích của malware. 
+Nhiều phần mềm độc hại dùng DNS tunneling để tuồn dữ liệu ra ngoài, vì cổng 53 hầu như không bao giờ bị firewall chặn. 
+Thấy truy vấn DNS tới tên miền dài loằng ngoằng, ngẫu nhiên như x7f3q9a8.evil.com → đáng ngờ!
+
+5. ICMP — tiếng "vọng" của mạng
+Đọc
+ICMP là giao thức của các lệnh chẩn đoán như ping và traceroute. 
+Tưởng tượng bạn đứng trong hang động và hét lên “Aloooo!” rồi chờ tiếng vọng — đó chính xác là cách ping hoạt động: gửi một gói Echo Request và chờ Echo Reply.
+
+ICMP không dùng cổng (nó nằm ở tầng Internet, không phải Giao vận), mà phân loại bằng trường Type và Code:
+
+Type	Ý nghĩa	Khi nào thấy
+8	Echo Request (ping đi)	Bạn gõ ping 8.8.8.8
+0	Echo Reply (ping về)	Đích trả lời còn sống
+3	Destination Unreachable	Không tới được đích
+11	Time Exceeded	TTL hết hạn (traceroute dùng)
+Đây là Q2 trong quiz: gói ICMP có Type = 8 nghĩa là Echo Request (ping request) — cú “hét” đi. 
+Còn Type = 0 mới là “tiếng vọng về”.
+
+# Tạo lưu lượng ICMP để thực hành bắt trong Wireshark
+ping -c 4 8.8.8.8   # send 4 echo requests to Google DNS
+# Mỗi dòng "64 bytes from 8.8.8.8" tương ứng 1 Echo Reply (Type 0)
+
+# Display filter ICMP trong Wireshark
+icmp                 # tất cả gói ICMP
+icmp.type == 8       # chỉ Echo Request (ping đi)
+icmp.type == 0       # chỉ Echo Reply (ping về)
+
+5. ICMP — tiếng "vọng" của mạng
+Đọc
+ICMP là giao thức của các lệnh chẩn đoán như ping và traceroute. Tưởng tượng bạn đứng trong hang động và hét lên “Aloooo!” rồi chờ tiếng vọng — đó chính xác là cách ping hoạt động: gửi một gói Echo Request và chờ Echo Reply.
+
+ICMP không dùng cổng (nó nằm ở tầng Internet, không phải Giao vận), mà phân loại bằng trường Type và Code:
+
+Type	Ý nghĩa	Khi nào thấy
+8	Echo Request (ping đi)	Bạn gõ ping 8.8.8.8
+0	Echo Reply (ping về)	Đích trả lời còn sống
+3	Destination Unreachable	Không tới được đích
+11	Time Exceeded	TTL hết hạn (traceroute dùng)
+
+# Tạo lưu lượng ICMP để thực hành bắt trong Wireshark
+ping -c 4 8.8.8.8   # send 4 echo requests to Google DNS
+# Mỗi dòng "64 bytes from 8.8.8.8" tương ứng 1 Echo Reply (Type 0)
+
+# Display filter ICMP trong Wireshark
+icmp                 # tất cả gói ICMP
+icmp.type == 8       # chỉ Echo Request (ping đi)
+icmp.type == 0       # chỉ Echo Reply (ping về)
+
+6. Quy trình 4 bước xác định giao thức trong Wireshark
+Khi cầm một gói tin lạ, hãy làm theo checklist này:
+
+BƯỚC 1: Nhìn cột Protocol của Wireshark (đã đoán sẵn: HTTP, DNS, TCP...)
+BƯỚC 2: Nhìn TCP/UDP + số cổng đích (80->HTTP | 443->HTTPS | 53->DNS)
+BƯỚC 3: Bóc payload xem "từ khóa chữ ký" ("GET /"->HTTP | Type=8->ping)
+BƯỚC 4: Dùng display filter cô lập & xác nhận ("http", "dns", "icmp.type==8")
+
+
+
