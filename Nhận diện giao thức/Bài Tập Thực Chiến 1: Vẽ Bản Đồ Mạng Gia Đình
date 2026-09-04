@@ -1,1 +1,103 @@
+1. Các "nhân vật" trong mạng gia đình
+Trước khi vẽ, phải biết đang vẽ ai. Hãy gặp dàn nhân vật quen thuộc — mỗi thiết bị một nhiệm vụ riêng, giống như các nhân viên trong một nhà hàng 🍜.
+
+Thiết bị	Vai trò (analogy)	Nhiệm vụ kỹ thuật
+Modem	Cổng chính nối ra đường	Chuyển tín hiệu của ISP (cáp quang/DSL/đồng trục) thành tín hiệu mạng nhà dùng được
+Router (bộ định tuyến)	Bảo vệ kiêm lễ tân	Định tuyến gói tin giữa mạng nội bộ và Internet; là gateway; thường kiêm NAT + firewall + DHCP
+Switch (bộ chuyển mạch)	Hành lang chia phòng	Chuyển khung dữ liệu (frame) giữa các thiết bị trong cùng một mạng LAN
+Access Point (điểm truy cập)	Sóng phát wifi	Cho thiết bị không dây (điện thoại, laptop) kết nối vào mạng có dây
+Firewall (tường lửa)	Người kiểm tra vé cửa	Chặn truy cập trái phép từ bên ngoài dựa trên bộ quy tắc
+Ở nhà, một chiếc “router wifi” bạn mua ngoài tiệm thực ra là 4-in-1: router + switch + access point + firewall gộp chung một hộp. Đừng để cái vỏ đánh lừa — bên trong nó làm nhiều việc.
+
+💡 Gateway (cổng kết nối) là thiết bị đứng ở ranh giới giữa mạng nội bộ và Internet. Trong nhà, router chính là gateway.
+Khi laptop muốn gửi dữ liệu ra Internet, nó gửi tới địa chỉ gateway (thường là 192.168.1.1) rồi router lo phần còn lại.
+
+2. Định tuyến vs Chuyển mạch
+Đây là chỗ dễ sai nhất, và quiz cũng hỏi. Analogy: switch giống nhân viên phát thư trong cùng một tòa nhà — chuyển thư từ phòng này sang phòng kia. Router giống bưu điện thành phố — chuyển thư giữa các tòa nhà/thành phố khác nhau (giữa các mạng).
+
+Tiêu chí	Switch (Layer 2)	Router (Layer 3)
+Làm việc trong	Cùng một mạng LAN	Giữa các mạng khác nhau
+Dựa trên địa chỉ	MAC address	IP address
+Có phải gateway ra Internet?	❌ Không	✅ Có
+Có NAT/firewall?	Thường không	Thường có
+⚠️ Sai lầm kinh điển: “Switch định tuyến dữ liệu giữa các mạng khác nhau.” → SAI. 
+Switch chỉ chuyển mạch trong một mạng. Việc đi giữa các mạng là của router. Nhớ: Switch = Same network, Router = Route between networks.
+
+3. Đường ra Internet: modem nối với ISP bằng gì?
+Modem là điểm nối ra nhà cung cấp dịch vụ (ISP). Loại cáp giữa modem và ISP khác với cáp trong nhà:
+
+Đoạn kết nối	Loại kết nối phổ biến
+Modem ⟷ ISP (ra ngoài)	Cáp quang / DSL / Cáp đồng trục
+Router ⟷ máy tính (trong nhà)	Cáp Ethernet (RJ45)
+Router ⟷ điện thoại/laptop	Wi-Fi (không dây)
+🎯 Nhớ: bên ngoài nhà (tới ISP) là hạ tầng của nhà mạng — cáp quang, DSL, hoặc đồng trục. Bên trong nhà mới là Ethernet và Wi-Fi. 
+Bluetooth thì chỉ dùng nối thiết bị gần (tai nghe, chuột), không phải để nối ra Internet.
+
+4. IP nội bộ, gateway và DHCP
+Mỗi cư dân trong khu chung cư cần số phòng để nhận thư. Trong mạng, “số phòng” là địa chỉ IP nội bộ (private IP). Các dải private phổ biến ở nhà:
+10.0.0.0    – 10.255.255.255      (dải lớn)
+172.16.0.0  – 172.31.255.255
+192.168.0.0 – 192.168.255.255     (hay gặp nhất ở gia đình)
+Ai phát số phòng? Chính là DHCP — dịch vụ chạy trên router, tự động cấp IP cho thiết bị khi nó vừa kết nối. Nhờ DHCP mà bạn cắm laptop vào là dùng được ngay, không cần gõ IP thủ công.
+
+Trên Linux, xem “số phòng” và “cổng” của bạn bằng:
+# Show your machine's IP address and interfaces
+ip addr show
+
+# Show the default gateway (your router / the way out to Internet)
+ip route | grep default
+# Example output: default via 192.168.1.1 dev wlan0 ...
+
+5. Liệt kê thiết bị đang có trong mạng nhà
+Muốn vẽ bản đồ, phải điểm danh cư dân. Vài cách an toàn (chỉ quét mạng nhà bạn nhé):
+# List devices your machine has recently talked to (ARP table)
+ip neigh show
+
+# Quick ping-sweep of the local subnet to find live hosts (safe on your own LAN)
+# Requires nmap: sudo apt install nmap
+nmap -sn 192.168.1.0/24
+
+6. Vẽ sơ đồ mạng bằng ASCII
+Đây là một sơ đồ mạng gia đình điển hình:
+                    ┌─────────────────┐
+                    │    INTERNET     │
+                    │   (nhà mạng)    │
+                    └────────┬────────┘
+                             │  cáp quang / DSL / đồng trục
+                    ┌────────┴────────┐
+                    │      MODEM      │   <- nối ra ISP
+                    └────────┬────────┘
+                             │  cáp Ethernet
+                    ┌────────┴────────┐
+                    │  ROUTER (WIFI)  │   <- GATEWAY 192.168.1.1
+                    │  NAT + Firewall │      + DHCP cấp IP
+                    └───┬─────────┬───┘
+              Wi-Fi     │         │    cáp Ethernet
+           ┌────────────┘         └────────────┐
+           │                                   │
+   ┌───────┴────────┐               ┌──────────┴─────────┐
+   │  ACCESS POINT  │               │   SWITCH (LAN)     │
+   │   (sóng wifi)  │               │  chuyển mạch nội bộ│
+   └───┬────────┬───┘               └───┬─────────┬──────┘
+       │        │                       │         │
+   ┌───┴──┐ ┌───┴───┐              ┌────┴───┐ ┌───┴────┐
+   │ Điện │ │ Laptop│              │ TV     │ │ Máy in │
+   │ thoại│ │       │              │ thông  │ │        │
+   │ .10  │ │ .11   │              │ minh.20│ │ .21    │
+   └──────┘ └───────┘              └────────┘ └────────┘
+
+7. Bảo mật mạng gia đình cơ bản
+Biện pháp	                        Vì sao quan trọng
+Mật khẩu Wi-Fi mạnh	              Chặn người lạ vào mạng (dài, có chữ hoa/thường/số/ký tự)
+Bật mã hóa WPA2 hoặc WPA3         Mã hóa dữ liệu qua sóng; WPA3 mạnh hơn WPA2
+Bật firewall trên router	        Chặn kết nối trái phép từ Internet
+Đổi mật khẩu admin mặc định	      admin/admin là thứ hacker thử đầu tiên
+Cập nhật firmware router	        Vá lỗ hổng đã bị phát hiện
+
+
+
+
+
+
+
 
