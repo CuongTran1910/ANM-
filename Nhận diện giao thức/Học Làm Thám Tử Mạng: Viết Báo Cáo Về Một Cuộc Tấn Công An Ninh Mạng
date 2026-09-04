@@ -1,1 +1,150 @@
+1. Báo cáo sự cố là gì và vì sao dân bảo mật ai cũng phải viết?
+Analogy dễ hình dung: báo cáo sự cố giống như biên bản của bác sĩ. 
+Bác sĩ không viết “bệnh nhân trông có vẻ mệt”, mà viết “sốt 39°C, ho khan 3 ngày, chẩn đoán viêm họng”. Rõ ràng, đo được, hành động được.
+
+Một báo cáo tấn công mạng cũng cần khách quan như thế. 
+Mục đích chính của nó là tóm tắt các sự kiện chính và tác động của vụ tấn công - chứ không phải để dọa nhau, tô vẽ kẻ tấn công, hay che giấu thiệt hại.
+
+Báo cáo TỐT	                         Báo cáo TỆ
+Nêu rõ mốc thời gian cụ thể	          “Gần đây có vụ tấn công lớn”
+Mô tả attack vector (cách vào)	      Chỉ nói tên loại tấn công
+Đánh giá impact bằng con số	          “Thiệt hại nặng lắm”
+Trích nguồn uy tín	                  Nghe đồn trên mạng
+Trung lập, đúng sự thật	              Cảm tính, thổi phồng hoặc giấu
+💡 Người đọc báo cáo của bạn (sếp, khách hàng, đội ứng cứu) cần ra quyết định dựa trên nó. 
+Cảm xúc cá nhân của bạn về “tên hacker đáng ghét” không giúp họ vá lỗ hổng.
+2. Bước ĐẦU TIÊN: xác định loại tấn công và phạm vi ảnh hưởng
+
+Đây là điểm cực kỳ quan trọng, nhớ kỹ nhé. 
+Bước đầu tiên KHÔNG phải là vội đưa giải pháp khắc phục, cũng không phải viết theo cảm tính. Trước tiên bạn phải trả lời: “Đây là loại tấn công gì, và nó chạm tới đâu?”
+
+Giống như lính cứu hỏa tới hiện trường: việc đầu tiên không phải xịt nước lung tung, mà là đánh giá đám cháy - cháy gì (gỗ, xăng, điện?), lan tới đâu, có người kẹt không. Xác định sai loại thì chữa sai cách.
+
+Trình tự phân tích một sự cố:
+[1] Xac dinh LOAI tan cong  ->  Ransomware? Phishing? DDoS? SQL Injection?
+        |
+        v
+[2] Xac dinh PHAM VI        ->  Bao nhieu may? Du lieu nao? Dich vu nao ngung?
+        |
+        v
+[3] Dung MOC THOI GIAN      ->  Vao luc nao, phat hien luc nao, xu ly luc nao?
+        |
+        v
+[4] Phan tich ATTACK VECTOR ->  Ke tan cong vao bang duong nao?
+        |
+        v
+[5] Danh gia IMPACT         ->  Hau qua tai chinh, van hanh, uy tin
+        |
+        v
+[6] Chi SAU DO moi ban giai phap / bai hoc
+⚠️ Rất nhiều bạn mới học sai ở chỗ này: đọc tin xong là nhảy ngay vào “phải cài antivirus, phải đổi mật khẩu”. Đó là bước 6, không phải bước 1. 
+Chưa hiểu chuyện gì xảy ra mà đã kê thuốc thì y như bác sĩ chưa khám đã bốc thuốc.
+
+3. Bộ khung 6 phần của một báo cáo ngắn
+Một báo cáo ngắn (khoảng 1-2 trang) chỉ cần 6 phần. Đây là checklist các yếu tố NÊN đưa vào:
+| **Phần**                     | **Câu hỏi cần trả lời**                                 | **Ví dụ**                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Tiêu đề & tóm tắt**        | Vụ việc gì? Tóm tắt trong một câu.                      | Ransomware DarkSide tấn công Colonial Pipeline, tháng 5/2021.                                                             |
+| **Mốc thời gian (Timeline)** | Sự cố xảy ra khi nào? Các mốc quan trọng là gì?         | 7/5/2021: hệ thống bị mã hóa; 12/5/2021: hoạt động được khôi phục.                                                        |
+| **Attack Vector**            | Kẻ tấn công xâm nhập bằng cách nào?                     | Sử dụng tài khoản VPN cũ bị lộ mật khẩu và không được bảo vệ bằng MFA.                                                    |
+| **Impact – Mức ảnh hưởng**   | Sự cố gây ra hậu quả gì?                                | Đường ống nhiên liệu phải ngừng hoạt động khoảng 6 ngày; công ty trả khoảng 4,4 triệu USD tiền chuộc.                     |
+| **Phản ứng & khắc phục**     | Doanh nghiệp và cơ quan chức năng đã xử lý như thế nào? | Ngắt một số hệ thống, điều tra sự cố, trả tiền chuộc; FBI sau đó thu hồi được một phần số tiền.                           |
+| **Bài học / Khuyến nghị**    | Có thể rút ra bài học gì để phòng tránh?                | Bật MFA, vô hiệu hóa tài khoản không còn sử dụng, quản lý mật khẩu tốt và thường xuyên kiểm tra tài khoản truy cập từ xa. |
+
+4. Vì sao ransomware là "ngôi sao" trong các báo cáo gần đây?
+
+Nhìn các báo cáo sự cố lớn vài năm qua, loại tấn công được nhắc đến nhiều nhất chính là Ransomware - mã độc mã hóa dữ liệu để tống tiền. Vì sao?
+
+Analogy: ransomware như kẻ đổi ổ khóa nhà bạn rồi đòi tiền chuộc chìa. Đồ đạc vẫn còn đó, nhưng bạn không vào được. Với doanh nghiệp, “đồ đạc” là toàn bộ dữ liệu và hệ thống - bị khóa là ngừng kinh doanh ngay.
+
+Ransomware nổi vì ba lý do:
+
+Sinh lời khủng: kẻ tấn công đòi thẳng tiền, thường bằng Bitcoin (khó truy vết).
+Dễ triển khai: có mô hình Ransomware-as-a-Service (RaaS) - nhóm viết mã độc “cho thuê” cho affiliate, chia phần trăm tiền chuộc. DarkSide chính là một RaaS.
+Hậu quả nhìn thấy được: bệnh viện ngừng mổ, đường ống ngừng bơm - báo chí đưa tin rầm rộ.
+# A tiny demo to explain the *concept* of encryption behind ransomware.
+# EDUCATIONAL ONLY - this is a toy Caesar cipher, NOT real malware.
+# Never run destructive code against files you do not own. Stay legal + ethical.
+
+def toy_encrypt(text: str, key: int) -> str:
+    """Shift each letter by 'key'. This only illustrates 'data becomes unreadable'."""
+    result = []
+    for ch in text:
+        if ch.isalpha():
+            base = ord('A') if ch.isupper() else ord('a')
+            result.append(chr((ord(ch) - base + key) % 26 + base))
+        else:
+            result.append(ch)  # keep spaces/punctuation as-is
+    return "".join(result)
+
+# Attacker "locks" the data; the victim can no longer read it without the key.
+secret = "PAY US 75 BITCOIN"
+locked = toy_encrypt(secret, key=3)
+print("Locked:", locked)   # -> "SDB XV 75 ELWFRLQ"
+# Real ransomware uses strong crypto (AES/RSA); this is only for intuition.
+
+5. Case study có thật: Colonial Pipeline (tháng 5/2021)
+Giờ ta ráp lý thuyết vào một vụ có thật, nổi tiếng để thấy báo cáo ngắn thực tế trông ra sao. Nguồn: FBI, Bộ Năng lượng Mỹ (DOE) và các hãng bảo mật.
+
+Báo cáo ngắn mẫu:
+
+Tóm tắt: Ngày 7/5/2021, Colonial Pipeline - đường ống nhiên liệu lớn nhất bờ Đông nước Mỹ - bị nhóm DarkSide tấn công bằng ransomware, buộc phải ngừng toàn bộ đường ống.
+Loại tấn công & phạm vi: Ransomware (mã hóa dữ liệu tống tiền); ảnh hưởng hệ thống CNTT của công ty, kéo theo phải chủ động ngắt hệ thống vận hành (OT).
+
+Mốc thời gian:
+  7/5/2021: phát hiện bị tấn công, ngừng đường ống.
+  Trong vài giờ đầu, khoảng 100 GB dữ liệu bị đánh cắp.
+  12/5/2021: đường ống hoạt động trở lại.
+  Tháng 6/2021: Bộ Tư pháp Mỹ thu hồi được một phần tiền chuộc.
+
+Attack vector: Kẻ tấn công vào qua một tài khoản VPN cũ, không còn dùng, bằng mật khẩu bị lộ. Nghiêm trọng nhất: tài khoản này không bật xác thực đa yếu tố (MFA).
+
+Impact:
+
+  Đường ống chở ~45% nhiên liệu bờ Đông ngừng ~6 ngày.
+  Dân đổ xô mua xăng, nhiều trạm hết hàng, giá tăng.
+  Colonial trả tiền chuộc ~75 Bitcoin (~4,4 triệu USD); FBI sau đó thu hồi khoảng 2,3 triệu USD.
+
+Bài học: Bật MFA cho MỌI tài khoản truy cập từ xa; vô hiệu hóa tài khoản không dùng; không tái sử dụng mật khẩu; có kế hoạch ứng cứu sự cố và backup.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
