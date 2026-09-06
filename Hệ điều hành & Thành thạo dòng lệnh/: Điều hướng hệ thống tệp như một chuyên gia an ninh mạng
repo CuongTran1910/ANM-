@@ -1,1 +1,78 @@
+1. Hệ thống tệp Linux là một cái cây
+Ở Windows, bạn quen với C:, D: — mỗi ổ đĩa một chữ cái. Linux thì khác: mọi thứ mọc ra từ MỘT gốc duy nhất gọi là root, ký hiệu /. Hãy hình dung nó như một cái cây lộn ngược: gốc / ở trên cùng, các thư mục con toả ra như cành, và tệp là những chiếc lá.
+
+/                         (root - gốc của mọi thứ)
+├── bin/                  (chương trình lệnh cơ bản: ls, cp...)
+├── etc/                  (file cấu hình hệ thống)
+├── home/                 (thư mục cá nhân của user)
+│   └── an/               (nhà riêng của user "an")
+│       ├── Documents/
+│       └── notes.txt
+├── root/                 (nhà riêng của user root - admin)
+├── tmp/                  (file tạm - hay bị lạm dụng để giấu mã độc)
+└── var/
+    └── log/              (nhật ký hệ thống - vàng ròng khi điều tra)
+Cấu trúc này tuân theo một chuẩn tên là FHS (Filesystem Hierarchy Standard) — nhờ đó dù bạn dùng Ubuntu, Kali hay CentOS, /etc luôn chứa cấu hình, /var/log luôn chứa log. Rất tiện: một khi thuộc bản đồ, bạn đi máy nào cũng được.
+| **Thư mục** | **Chứa gì**                             | **Vì sao dân bảo mật quan tâm**                                               |
+| ----------- | --------------------------------------- | ----------------------------------------------------------------------------- |
+| `/`         | Gốc của toàn hệ thống                   | Điểm bắt đầu mọi đường dẫn tuyệt đối                                          |
+| `/etc`      | File cấu hình (`passwd`, `ssh`, `ufw`…) | Kiểm tra cấu hình sai, backdoor cấu hình                                      |
+| `/home`     | Thư mục cá nhân của user                | Dữ liệu người dùng, file đáng ngờ                                             |
+| `/var/log`  | Nhật ký hệ thống                        | Điều tra dấu vết tấn công (`auth.log`)                                        |
+| `/tmp`      | File tạm, ai cũng có thể ghi            | Nơi mã độc có thể tạm lưu hoặc chạy                                           |
+| `/root`     | Thư mục cá nhân của user `root`         | Có thể chứa dữ liệu, script hoặc dấu vết sau khi kẻ tấn công chiếm quyền root |
+
+2. `pwd` — Tôi đang ở đâu?
+Analogy: bạn đi lạc trong trung tâm thương mại và tìm cái bảng “You are here” 📍. Lệnh pwd (viết tắt của Print Working Directory) chính là tấm bảng đó — nó in ra đường dẫn tuyệt đối của thư mục bạn đang đứng.
+# Print the absolute path of the current directory
+pwd
+# Example output:
+# /home/an/Documents
+
+Kết quả /home/an/Documents cho biết: bạn đang ở thư mục Documents, nằm trong an, nằm trong home, nằm trong gốc /. Không mơ hồ, không đoán. Trước khi chạy bất kỳ lệnh nguy hiểm nào (ví dụ xoá file), thói quen tốt là gõ pwd để chắc chắn mình đang đứng đúng chỗ.
+⚠️ Rất nhiều tai nạn kiểu “xoá nhầm cả thư mục” bắt đầu từ việc không biết mình đang ở đâu. pwd mất 1 giây, sửa sai mất cả ngày.
+3. `ls` — Nhìn quanh xem có gì
+Sau khi biết mình ở đâu, bạn muốn nhìn xem trong phòng có gì. Lệnh ls (list) liệt kê nội dung thư mục — giống bật đèn lên nhìn quanh.
+
+# List files and folders in the current directory
+ls
+
+# List with details: permissions, owner, size, modified time
+ls -l
+
+# Include hidden files (names starting with a dot)
+ls -a
+
+# Combine both, with human-readable sizes
+ls -lah
+4. `cd` — Di chuyển giữa các thư mục
+Đây là “đôi chân” của bạn. cd (Change Directory) đưa bạn từ thư mục này sang thư mục khác.
+# Move into the "Documents" folder (relative path)
+cd Documents
+
+# Move using an absolute path (starts from root /)
+cd /var/log
+
+# Go up one level to the parent directory
+cd ..
+
+# Go back to your home directory (three equivalent ways)
+cd ~
+cd
+cd /home/an
+
+# Jump back to the PREVIOUS directory you were in
+cd -
+Điểm mấu chốt là hiểu các ký hiệu đường dẫn:
+| **Ký hiệu** | **Nghĩa**                      | **Ví dụ**                         |
+| ----------- | ------------------------------ | --------------------------------- |
+| `/`         | Gốc hệ thống (root)            | `cd /` → về gốc                   |
+| `~`         | Thư mục home của user hiện tại | `cd ~` = `cd /home/an`            |
+| `.`         | Thư mục hiện tại               | `./script.sh` → chạy script ở đây |
+| `..`        | Thư mục cha (lên một cấp)      | `cd ..`                           |
+| `-`        Analogy dễ nhớ: .. giống nút “Back” trên trình duyệt để lên một cấp; ~ giống nút “Home” đưa bạn thẳng về nhà; còn cd - giống nút “Alt+Tab” nhảy qua lại giữa hai chỗ.
+| Thư mục vừa rời khỏi           | `cd -` → quay lại chỗ cũ          |
+
+
+
 
