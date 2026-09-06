@@ -1,1 +1,158 @@
+1. Firewall và cổng — ôn nhanh trước khi bấm lệnh
+Mỗi khi một chương trình muốn nghe kết nối mạng, nó “ngồi” ở một cổng — con số từ 0 đến 65535. Firewall quyết định: gói tin đến cổng này thì cho qua (allow) hay chặn (deny/reject).
+
+Vài cổng quen thuộc bạn sẽ gặp suốt:
+| **Cổng** | **Giao thức** | **Dịch vụ** | **Ghi chú**                            |
+| -------: | ------------- | ----------- | -------------------------------------- |
+|       22 | TCP           | SSH         | Quản trị từ xa — **cực kỳ nên bảo vệ** |
+|       80 | TCP           | HTTP        | Web thường                             |
+|      443 | TCP           | HTTPS       | Web mã hóa                             |
+|     3306 | TCP           | MySQL       | CSDL — **không nên mở ra Internet**    |
+|       23 | TCP           | Telnet      | Cũ, không mã hóa — nên **deny**        |
+|       53 | TCP/UDP       | DNS         | Phân giải tên miền                     |
+
+💡 Chặn (deny) khác từ chối (reject) thế nào? deny = âm thầm nuốt gói tin, kẻ dò quét không biết cổng có tồn tại hay không (giống bấm chuông mà không ai ra). 
+reject = trả lời thẳng “cổng đóng” (giống có người ra nói “về đi”). 
+Mặc định UFW dùng deny cho hướng vào — kín đáo hơn.
+
+2. UFW là gì? Tại sao lại "Uncomplicated"?
+UFW = Uncomplicated Firewall (tường lửa không-rắc-rối). 
+Nó không phải một firewall mới toanh — nó là một giao diện (frontend) cho iptables (thực ra ngày nay là nftables bên dưới). iptables mạnh nhưng cú pháp khó nuốt; 
+UFW dịch ý định của bạn thành các luật iptables phức tạp giùm.
+So sánh cho dễ thấy:
+| **Nội dung**     | **`iptables` trực tiếp**                        | **UFW**                           |
+| ---------------- | ----------------------------------------------- | --------------------------------- |
+| Cho phép cổng 80 | `iptables -A INPUT -p tcp --dport 80 -j ACCEPT` | `sudo ufw allow 80`               |
+| Độ dễ đọc        | Khó, dễ sai thứ tự luật                         | Dễ đọc, gần giống câu tiếng Anh   |
+| Ai dùng          | Người rành về mạng                              | Người mới, sysadmin bận rộn       |
+| Sức mạnh         | Toàn quyền, cấu hình chi tiết                   | Đủ dùng cho khoảng 90% trường hợp |
+🎯 Nhớ cho câu quiz: UFW là frontend (giao diện) cho iptables — đây là điểm mấu chốt.
+UFW không thay thế iptables mà “ngồi lên trên” nó.
+# Check UFW version and whether it is installed
+ufw version
+
+# If missing, install it on Debian/Ubuntu
+sudo apt update && sudo apt install ufw
+
+# Show current firewall status (inactive by default on a fresh system)
+sudo ufw status
+
+3. Đặt chính sách mặc định (default policy) — nền tảng của mọi thứ
+Trước khi bật, ta nên định “triết lý”: chặn tất cả đường vào, cho phép tất cả đường ra. 
+Đây là mô hình an toàn chuẩn — vào thì kiểm soát chặt, ra thì thoải mái (để apt update, tải web… vẫn chạy).
+
+# Deny everything coming IN by default (secure baseline)
+sudo ufw default deny incoming
+
+# Allow everything going OUT by default (so your server can browse/update)
+sudo ufw default allow outgoing
+Sau hai lệnh này, nếu bạn bật UFW ngay thì mọi cổng vào đều đóng — kể cả SSH! Nên đừng bật vội, hãy mở SSH trước (mục 5) rồi mới enable. Nếu không, bạn sẽ tự nhốt mình ngoài cửa của chính máy chủ mình (một pha “khóa nhầm ngoài nhà” kinh điển của dân mới 😅).
+
+4. Cho phép và chặn cổng — cú pháp cốt lõi
+Đây là phần bạn sẽ dùng nhiều nhất. Cú pháp cơ bản: sudo ufw <allow|deny> <cổng>.
+# Allow HTTP (port 80) and HTTPS (port 443) so a web server is reachable
+sudo ufw allow 80
+sudo ufw allow 443
+
+# Deny Telnet (port 23) - an old insecure protocol nobody should expose
+sudo ufw deny 23
+
+# Allow a specific protocol only (TCP), not both TCP and UDP
+sudo ufw allow 80/tcp
+
+# You can also use the service NAME instead of the number
+sudo ufw allow ssh      # equals port 22
+sudo ufw allow http     # equals port 80
+UFW đọc tên dịch vụ từ file /etc/services, nên sudo ufw allow ssh và sudo ufw allow 22 cho kết quả như nhau.
+
+Cho phép một dải cổng và theo IP nguồn (rất hữu ích để chỉ cho phép văn phòng bạn SSH vào):
+# Allow a port range (note: must specify protocol for ranges)
+sudo ufw allow 6000:6007/tcp
+
+# Allow SSH ONLY from a specific IP address (whitelist your own machine)
+sudo ufw allow from 203.0.113.10 to any port 22
+
+# Allow from an entire subnet
+sudo ufw allow from 192.168.1.0/24 to any port 22
+Cảnh báo thực tế: Mở sudo ufw allow 22 là mở SSH cho cả thế giới — bot sẽ dò mật khẩu liên tục. Nếu được, hãy giới hạn theo IP (allow from ...) hoặc dùng sudo ufw limit ssh để giới hạn tốc độ (chặn tạm IP nào kết nối quá 6 lần trong 30 giây — chống dò mật khẩu thô).
+
+5. Bật UFW an toàn (không tự khóa mình) + xem trạng thái
+
+# 1) Set safe defaults
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# 2) ALWAYS allow SSH BEFORE enabling, or you will lock yourself out
+sudo ufw allow 22
+
+# 3) Now it is safe to turn the firewall ON
+sudo ufw enable
+
+Ghi nhớ: lệnh bật là sudo ufw enable (không phải start, on hay active — đó là các lệnh bịa). Tắt là sudo ufw disable.
+
+Xem những gì đang chạy:
+# Basic status - list of active rules
+sudo ufw status
+
+# More detail: default policies, logging level, and numbered rules
+sudo ufw status verbose
+
+# Numbered list - needed when you want to delete a rule by number
+sudo ufw status numbered
+Kết quả sudo ufw status trông như thế này:
+
+Status: active
+
+To                         Action      From
+--                         ------      ----
+22                         ALLOW       Anywhere        <- SSH (đã mở, an toàn)
+80                         ALLOW       Anywhere        <- HTTP
+443                        ALLOW       Anywhere        <- HTTPS
+23                         DENY        Anywhere        <- Telnet (đã chặn)
+
+6. Xóa, đặt lại và bật log
+Sai thì sửa — đây là các lệnh dọn dẹp:
+# Delete a rule by re-typing it with "delete"
+sudo ufw delete allow 80
+
+# Or delete by its number (run "status numbered" first to see numbers)
+sudo ufw status numbered
+sudo ufw delete 2
+
+# Turn on logging to record blocked/allowed packets
+sudo ufw logging on
+
+# Wipe ALL rules and start fresh (careful: this disables the firewall)
+sudo ufw reset
+
+Log của UFW thường nằm ở /var/log/ufw.log. Xem thử để “bắt tận tay” mấy gói tin bị chặn:
+# Watch firewall log entries in real time (great for spotting scans)
+sudo tail -f /var/log/ufw.log
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
