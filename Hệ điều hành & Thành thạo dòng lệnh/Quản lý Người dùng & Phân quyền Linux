@@ -1,1 +1,140 @@
+1. User, Group và ông trùm root
+Trong nhà hàng, có khách (guest), nhân viên (staff) và bếp trưởng (có chìa mở kho). Trên Linux cũng có ba “vai” tương tự:
+
+root (superuser): bếp trưởng, UID = 0, làm được mọi thứ — kể cả tự bắn vào chân mình (xoá cả hệ điều hành). Quyền lực tuyệt đối = nguy hiểm tuyệt đối.
+User thường: mỗi người một tài khoản, có UID riêng (thường từ 1000 trở lên với Ubuntu/Debian).
+User hệ thống (service account): các dịch vụ như www-data, mysql chạy dưới tài khoản riêng, UID thấp (1-999), để nếu bị hack thì thiệt hại bị “nhốt” lại.
+Group (nhóm) giúp gom nhiều user để cấp quyền cùng lúc — giống việc phát chung một loại thẻ từ cho cả phòng ban.
+| **Khái niệm**       | **Là gì**                                              | **Ví dụ**                                                  |
+| ------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| **UID**             | Số định danh của user trong Linux                      | `root = 0`, user thường thường bắt đầu từ `1000`           |
+| **GID**             | Số định danh của group                                 | Thường user có một group riêng với GID tương ứng           |
+| **root**            | Tài khoản quản trị cao nhất, có gần như mọi quyền      | Dùng để quản trị hệ thống, **hạn chế đăng nhập trực tiếp** |
+| **Service account** | Tài khoản được tạo để chạy một dịch vụ hoặc tiến trình | `www-data` cho Apache/Nginx, `mysql` cho MySQL             |
+# Who am I right now?
+whoami
+id                 # show UID, GID and groups you belong to
+
+# List all users on the system (each line = one account)
+cut -d: -f1 /etc/passwd
+2.Ba file "hộ khẩu": /etc/passwd, /etc/shadow, /etc/group
+Nếu user là cư dân thì Linux có ba cuốn sổ hộ khẩu.
+
+/etc/passwd — sổ danh sách cư dân. Đây là nơi lưu thông tin tài khoản người dùng: tên đăng nhập, UID, GID, thư mục home, shell mặc định. 
+File này ai cũng đọc được (nhưng không sửa được nếu không phải root).
+# Format: username:x:UID:GID:comment:home_dir:login_shell
+grep "^root" /etc/passwd
+# root:x:0:0:root:/root:/bin/bash
+Chữ x ở cột thứ hai nghĩa là “mật khẩu không nằm ở đây, đi tìm chỗ khác” — chính là /etc/shadow.
+
+/etc/shadow — két sắt chứa mật khẩu (đã băm/hash). Chỉ root đọc được. Đây là lý do người ta tách ra: nếu để hash mật khẩu trong /etc/passwd (world-readable) thì hacker chỉ cần đọc file rồi mang về crack offline.
+
+/etc/group — sổ danh sách phòng ban, ghi mỗi group có những thành viên nào.
+| **File**      | **Lưu gì**                                             | **Ai đọc được**  |
+| ------------- | ------------------------------------------------------ | ---------------- |
+| `/etc/passwd` | Thông tin tài khoản: username, UID, GID, home, shell   | Tất cả user      |
+| `/etc/shadow` | Hash mật khẩu và thông tin/chính sách hết hạn mật khẩu | Chủ yếu **root** |
+| `/etc/group`  | Thông tin các group và danh sách thành viên            | Tất cả user      |
+3. Quản lý người dùng: useradd, passwd, usermod, userdel
+Đây là bộ công cụ tạo và quản lý “cư dân”.
+# Create a new user (must be root, so we prefix sudo)
+sudo useradd -m -s /bin/bash alice   # -m makes a home dir, -s sets login shell
+
+# Set (or change) that user's password
+sudo passwd alice                    # you'll be prompted to type the new password
+
+# Modify an existing user: add alice to the 'sudo' group
+sudo usermod -aG sudo alice          # -aG = append to Group (don't forget -a!)
+
+# Delete a user and remove their home directory
+sudo userdel -r alice                # -r also removes /home/alice
+⚠️ Gotcha kinh điển: usermod -G sudo alice (thiếu -a) sẽ ghi đè toàn bộ group của alice thành chỉ group sudo, đá cô ấy ra khỏi mọi group cũ. Luôn dùng -aG khi muốn thêm.
+
+| **Lệnh**  | **Tác dụng**                                    |
+| --------- | ----------------------------------------------- |
+| `useradd` | Tạo người dùng mới                              |
+| `passwd`  | Đặt hoặc đổi mật khẩu                           |
+| `usermod` | Sửa thuộc tính của user như group, shell, home… |
+| `userdel` | Xoá người dùng                                  |
+
+4. Đọc quyền file với ls -l
+Gõ ls -l và bạn sẽ thấy một chuỗi bí ẩn kiểu -rwxr-xr--. Đừng sợ, nó cực logic.
+ls -l secret.txt
+# -rw-r--r-- 1 alice devs 1024 Aug 13 10:00 secret.txt
+Chuỗi 10 ký tự đầu chia thành 4 phần:
+  -        rw-        r--        r--
+type   owner(u)   group(g)  others(o)
+ |        |          |          |
+file  chủ sở hữu  nhóm       mọi người khác
+Ký tự đầu: - file thường, d thư mục, l symbolic link.
+Ba khối 3 ký tự tiếp theo là quyền cho owner / group / others, mỗi khối gồm r (read), w (write), x (execute); dấu - nghĩa là không có quyền đó.
+Với ví dụ trên: owner alice được đọc+ghi (rw-), group devs chỉ đọc (r--), người khác cũng chỉ đọc (r--).
+
+5. chmod và bí kíp số 4-2-1
+Đây là phần hay bị hỏi nhất và cũng quan trọng nhất. Mỗi quyền có một giá trị số:
+| **Quyền**          | **Ký hiệu** | **Giá trị số** |
+| ------------------ | ----------- | -------------: |
+| Đọc (read)         | `r`         |          **4** |
+| Ghi (write)        | `w`         |          **2** |
+| Thực thi (execute) | `x`         |          **1** |
+Muốn tính quyền cho một nhóm, bạn cộng các giá trị lại. Giống như order combo ở quán ăn: r=4, w=2, x=1 — chọn cái nào cộng cái đó:
+
+rwx = 4+2+1 = 7
+rw- = 4+2 = 6
+r-x = 4+1 = 5
+r-- = 4
+Một quyền đầy đủ có 3 số, lần lượt cho owner / group / others:
+
+# 754 = owner rwx (7), group r-x (5), others r-- (4)
+chmod 754 script.sh
+
+# Same result using symbolic mode
+chmod u=rwx,g=rx,o=r script.sh
+
+# Add execute for owner only (relative change)
+chmod u+x deploy.sh
+
+# Common: make a private key readable only by you
+chmod 600 id_rsa          # owner rw-, group ---, others ---
+
+6. sudo: mượn chìa khoá tổng có kiểm soát
+Bạn không cần (và không nên) đăng nhập thẳng bằng root suốt ngày — nguy hiểm như đi chợ mà cầm theo két sắt. Thay vào đó, sudo cho phép user thường thực thi một lệnh với quyền của root, có ghi log và kiểm soát.
+# Run a single command as root
+sudo apt update
+
+# Edit a protected file safely
+sudo nano /etc/hosts
+
+# Open an interactive root shell (use sparingly!)
+sudo -i
+Ai được sudo do file /etc/sudoers quyết định (sửa bằng visudo để tránh làm hỏng cú pháp). Thông thường, chỉ cần thêm user vào group sudo (Ubuntu) hoặc wheel (RHEL/CentOS) là đủ — như ta đã làm ở mục 3.
+| **Cách lên root**    | **Ưu điểm**                                | **Rủi ro**                                                        |
+| -------------------- | ------------------------------------------ | ----------------------------------------------------------------- |
+| `sudo <lệnh>`        | Có log, thực hiện từng lệnh, an toàn hơn   | User cần được cấp quyền trong `sudoers`                           |
+| `su -`               | Đơn giản, chuyển sang phiên đăng nhập root | Khó truy vết theo từng user, dễ lạm quyền                         |
+| Login trực tiếp root | —                                          | Nên **tắt/hạn chế** vì giảm khả năng audit và tăng rủi ro bảo mật |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
