@@ -1,1 +1,134 @@
+1. Script đầu tiên: shebang và cách chạy
+Một script Bash chẳng qua là một file văn bản chứa các lệnh bạn vốn gõ trong terminal. Điều khác biệt duy nhất: dòng đầu tiên phải là shebang — dấu hiệu báo cho hệ điều hành “hãy dùng chương trình nào để chạy file này”.
+#!/bin/bash
+# My first script - print a friendly greeting
+echo "Xin chào, đây là script Bash đầu tiên của mình!"
+echo "Hôm nay là: $(date)"
+Dòng #!/bin/bash chính là shebang. $(date) là command substitution — chạy lệnh date rồi nhét kết quả vào chỗ đó (ta học kỹ ở dưới).
+
+Để chạy, có hai cách. Cách “cấp quyền + chạy trực tiếp” là chuẩn nhất:
+
+chmod +x hello.sh   # make the file executable
+./hello.sh          # run it
+
+| **Cách chạy**              | **Lệnh**          | **Cần shebang?**                  | **Cần `chmod +x`?** |
+| -------------------------- | ----------------- | --------------------------------- | ------------------- |
+| **Chạy trực tiếp**         | `./hello.sh`      | Có, để xác định shell/interpreter | Có                  |
+| **Gọi shell tường minh**   | `bash hello.sh`   | Không bắt buộc                    | Không               |
+| **Nạp vào shell hiện tại** | `source hello.sh` | Không                             | Không               |
+
+2. Biến: cái hộp lưu dữ liệu
+Biến giống như ô chứa đồ trong tủ lạnh có dán nhãn: bạn bỏ giá trị vào, dán tên lên, khi cần thì lấy ra theo tên. Trong Bash, cú pháp khai báo cực kỳ khó tính về dấu cách:
+#!/bin/bash
+name="An Ninh Mang"   # correct: NO spaces around '='
+count=42              # numbers are stored as text too
+target="192.168.1.10"
+
+echo "$name"          # use a variable by prefixing with $
+echo "IP mục tiêu là: $target"
+
+⚠️ Đây là chỗ người mới sai NHIỀU nhất. Nhớ kỹ:
+| **Viết**          | **Kết quả** | **Vì sao**                                                                      |
+| ----------------- | ----------- | ------------------------------------------------------------------------------- |
+| `var="hello"`     | ✅ Đúng      | Không có dấu cách quanh dấu `=`                                                 |
+| `var = "hello"`   | ❌ Sai       | Bash hiểu `var` là một **lệnh**, còn `=` và `"hello"` là tham số                |
+| `$var="hello"`    | ❌ Sai       | Khi **gán giá trị** cho biến thì không có `$` phía trước tên biến               |
+| `set var="hello"` | ❌ Sai       | `set` dùng để thiết lập tùy chọn hoặc tham số của shell, không dùng để gán biến |
+Quy tắc vàng: gán thì viết tên trơn (var=...), dùng thì thêm $ ($var). Và luôn bọc biến trong dấu ngoặc kép "$var" khi dùng — để phòng khi giá trị chứa dấu cách (rất quan trọng với tên file!).
+
+3. Biến môi trường có sẵn (rất hữu ích cho bảo mật)
+Bash tặng bạn sẵn nhiều biến chứa thông tin về phiên làm việc. Với dân bảo mật, những biến này giúp script “biết mình đang là ai, ở đâu”:
+#!/bin/bash
+# Show the current session context
+echo "Tên đăng nhập : $USER"   # login username, e.g. "alice"
+echo "Thư mục nhà   : $HOME"   # home directory, e.g. /home/alice
+echo "Thư mục hiện tại: $PWD"  # present working directory
+echo "User ID (số)  : $UID"    # numeric user ID
+| **Biến** | **Chứa gì**                              | **Ví dụ giá trị**      |
+| -------- | ---------------------------------------- | ---------------------- |
+| `$USER`  | Tên đăng nhập của user hiện tại          | `alice`                |
+| `$HOME`  | Đường dẫn đến thư mục home của user      | `/home/alice`          |
+| `$UID`   | **ID dạng số** của user hiện tại         | `1000` (`root` là `0`) |
+| `$PWD`   | Đường dẫn thư mục đang làm việc hiện tại | `/home/alice/labs`     |
+🎯 $UID cực kỳ quan trọng trong an ninh mạng: nó là con số định danh người dùng. root (quyền cao nhất) luôn có $UID=0. Nhiều script kiểm tra if [ "$UID" -eq 0 ] để biết mình có đang chạy với quyền root hay không — trước khi làm việc nguy hiểm như sửa firewall.
+
+4. Vòng lặp `for`: lặp qua một danh sách
+Vòng lặp for giống việc bạn điểm danh cả lớp: có một danh sách tên, bạn đọc lần lượt từng người. Trong Bash, for duyệt qua từng phần tử của một danh sách và chạy khối lệnh cho mỗi phần tử.
+
+Có ba cách tạo danh sách phổ biến — và cả ba đều đúng để in số từ 1 đến 5:
+#!/bin/bash
+# Method 1: explicit list of items
+for i in 1 2 3 4 5; do
+  echo "$i"
+done
+
+# Method 2: brace expansion {start..end}
+for i in {1..5}; do
+  echo "$i"
+done
+
+# Method 3: seq command inside command substitution
+for i in $(seq 1 5); do
+  echo "$i"
+done
+
+| **Cú pháp**                        | **Đúng?** | **Ghi chú**                        |
+| ---------------------------------- | --------- | ---------------------------------- |
+| `for i in 1 2 3 4 5; do ... done`  | ✅         | Liệt kê từng giá trị, rõ ràng      |
+| `for i in {1..5}; do ... done`     | ✅         | Dùng **brace expansion**, ngắn gọn |
+| `for i in $(seq 1 5); do ... done` |           |                                    |
+Ứng dụng thực tế cực hay: duyệt qua tất cả file .log trong thư mục để tìm dấu vết:
+#!/bin/bash
+# Print the name of every .log file in the current directory
+for file in *.log; do
+  echo "Đang kiểm tra: $file"
+done
+
+#!/bin/bash
+# Print the name of every .log file in the current directory
+for file in *.log; do
+  echo "Đang kiểm tra: $file"
+done
+Ở đây *.log là glob — Bash tự thay nó bằng danh sách các file .log thật sự có mặt. Nhớ bọc "$file" để an toàn với tên file có dấu cách.
+5. Vòng lặp `while`: lặp khi điều kiện còn đúng
+
+Nếu for là “điểm danh danh sách có sẵn”, thì while là “còn khách xếp hàng thì còn phục vụ” — bạn không biết trước bao nhiêu khách, cứ còn điều kiện đúng thì còn làm. while lặp lại một khối lệnh chừng nào điều kiện còn đúng (true).
+#!/bin/bash
+# Count from 1 to 5 using while
+count=1
+while [ "$count" -le 5 ]; do
+  echo "Lần lặp thứ $count"
+  count=$((count + 1))   # arithmetic: increase count by 1
+done
+[ "$count" -le 5 ] là điều kiện: “count nhỏ hơn hoặc bằng 5”. Chừng nào còn đúng, vòng lặp còn chạy. $((count + 1)) là arithmetic expansion — làm phép tính số học. ⚠️ Nếu quên dòng tăng count, điều kiện mãi đúng → vòng lặp vô tận, phải nhấn Ctrl+C để dừng!
+
+Một mẫu while cực phổ biến trong bảo mật là đọc từng dòng của file (ví dụ danh sách IP mục tiêu, hay từ điển mật khẩu) — ta sẽ gặp lại ở mục “Nhìn sâu hơn”. Trước hết, đây là các toán tử so sánh số dùng trong điều kiện:
+Toán tử so sánh (số)	        Ý nghĩa
+-eq	                        bằng (equal)
+-ne	                        khác (not equal)
+-lt / -le	                  nhỏ hơn / nhỏ hơn hoặc bằng
+-gt / -ge	                  lớn hơn / lớn hơn hoặc bằng
+
+6. Ghép lại: một script an ninh mạng nhỏ
+Giờ ta ghép biến + vòng lặp thành một script “ping quét” đơn giản — kiểm tra host nào trong mạng con đang “sống”. Đây là bước trinh sát (reconnaissance) cơ bản, chỉ chạy trong lab của bạn:
+
+#!/bin/bash
+# Simple host discovery in a lab subnet (RUN ONLY IN YOUR OWN LAB)
+subnet="192.168.56"           # variable holds the subnet prefix
+
+for host in $(seq 1 10); do
+  ip="$subnet.$host"          # build full IP by combining variables
+  # -c1: send 1 packet, -W1: wait max 1 second
+  if ping -c1 -W1 "$ip" > /dev/null 2>&1; then
+    echo "[+] Host đang hoạt động: $ip"
+  fi
+done
+
+Script này gói gọn mọi thứ đã học: một biến (subnet), một vòng lặp for với $(seq ...), việc ghép biến thành IP đầy đủ, và một điều kiện if. Chỉ vài dòng nhưng thay được cả tiếng đồng hồ gõ tay.
+
+
+
+
+
+
 
