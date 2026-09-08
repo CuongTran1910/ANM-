@@ -1,1 +1,5 @@
+1. PowerShell là gì
+Analogy nhanh: Bash giống một băng chuyền chỉ chở giấy ghi chú - mọi thứ đi qua đều là chuỗi văn bản (text). Bạn muốn lấy ra thông tin nào thì phải cắt, dán, lọc chữ bằng grep, awk, cut. PowerShell thì giống một băng chuyền chở nguyên cả hộp đồ có nhãn dán sẵn - mỗi thứ đi qua là một object với các thuộc tính (property) rõ ràng, bạn gọi tên thuộc tính là lấy ra được.
+
+Ví dụ, ls -l trong Bash trả về một đống chữ, muốn lấy dung lượng file bạn phải đếm cột thứ 5. Còn Get-ChildItem trong PowerShell trả về object có sẵn thuộc tính .Length (kích thước), .Name, .LastWriteTime… gọi phát ra ngay.
 
