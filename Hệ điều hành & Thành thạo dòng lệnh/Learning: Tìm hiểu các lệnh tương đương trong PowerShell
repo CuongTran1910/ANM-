@@ -2,4 +2,84 @@
 Analogy nhanh: Bash giống một băng chuyền chỉ chở giấy ghi chú - mọi thứ đi qua đều là chuỗi văn bản (text). Bạn muốn lấy ra thông tin nào thì phải cắt, dán, lọc chữ bằng grep, awk, cut. PowerShell thì giống một băng chuyền chở nguyên cả hộp đồ có nhãn dán sẵn - mỗi thứ đi qua là một object với các thuộc tính (property) rõ ràng, bạn gọi tên thuộc tính là lấy ra được.
 
 Ví dụ, ls -l trong Bash trả về một đống chữ, muốn lấy dung lượng file bạn phải đếm cột thứ 5. Còn Get-ChildItem trong PowerShell trả về object có sẵn thuộc tính .Length (kích thước), .Name, .LastWriteTime… gọi phát ra ngay.
+| **Đặc điểm**             | **Bash (Linux)**              | **PowerShell**                                         |
+| ------------------------ | ----------------------------- | ------------------------------------------------------ |
+| **Kết quả trả về**       | Chủ yếu là chuỗi text         | Object `.NET` có thuộc tính                            |
+| **Cách nối lệnh**        | Pipe `\|` truyền text         | Pipe `\|` truyền object                                |
+| **Đặt tên lệnh**         | Ngắn gọn như `ls`, `rm`       | Theo dạng `Verb-Noun` như `Get-ChildItem`              |
+| **Phân biệt hoa/thường** | Có, thường **case-sensitive** | Thường **case-insensitive**                            |
+| **Nền tảng**             | Chủ yếu Linux/macOS           | Windows, đồng thời hỗ trợ Linux/macOS với PowerShell 7 |
+
+2. Quy tắc `Verb-Noun`: bí kíp đoán tên lệnh
+Điều đầu tiên khiến dân Linux “sốc”: tên lệnh PowerShell dài loằng ngoằng. Nhưng có quy tắc cực rõ ràng, học một lần dùng mãi: mọi lệnh (gọi là cmdlet) đều theo dạng Động từ - Danh từ (Verb-Noun).
+
+Get- : lấy/xem thứ gì đó (Get-ChildItem, Get-Content, Get-Process)
+Set- : thiết lập/thay đổi (Set-Location, Set-Content)
+New- : tạo mới (New-Item)
+Remove- : xóa (Remove-Item)
+Test- : kiểm tra (Test-Connection)
+# List all approved verbs so command names stay predictable
+Get-Verb
+
+# See what a cmdlet does, its parameters and examples
+Get-Help Get-ChildItem -Examples
+
+# Discover any command related to "process"
+Get-Command *-Process
+
+3. Bảng đối chiếu lệnh Linux ↔ PowerShell (phần quan trọng nhất)
+Đây là “từ điển dịch thuật” bạn cần nhớ. Cột Alias là bí danh (tên rút gọn) mà PowerShell cố tình tạo ra để dân Linux gõ cho quen tay.
+| **Việc cần làm**      | **Linux (Bash)**  | **PowerShell (cmdlet đầy đủ)** | **Alias có sẵn**                    |
+| --------------------- | ----------------- | ------------------------------ | ----------------------------------- |
+| Liệt kê file/thư mục  | `ls`              | `Get-ChildItem`                | `ls`, `dir`, `gci`                  |
+| Xem nội dung file     | `cat`             | `Get-Content`                  | `cat`, `type`, `gc`                 |
+| Đổi thư mục làm việc  | `cd`              | `Set-Location`                 | `cd`, `sl`                          |
+| Xem thư mục hiện tại  | `pwd`             | `Get-Location`                 | `pwd`, `gl`                         |
+| Xóa file/thư mục      | `rm`              | `Remove-Item`                  | `rm`, `del`, `ri`                   |
+| Tạo file/thư mục      | `touch` / `mkdir` | `New-Item`                     | `ni`                                |
+| Sao chép              | `cp`              | `Copy-Item`                    | `cp`, `copy`, `cpi`                 |
+| Di chuyển/đổi tên     | `mv`              | `Move-Item`                    | `mv`, `move`, `mi`                  |
+| Kiểm tra kết nối mạng | `ping`            | `Test-Connection`              | Không có alias mặc định tương đương |
+| Xem tiến trình        | `ps`              | `Get-Process`                  | `ps`, `gps`                         |
+| In ra màn hình        | `echo`            | `Write-Output`                 | `echo`, `write`                     |
+| Lọc/tìm chữ           | `grep`            | `Select-String`                | `sls`                               |
+Chú ý mấy cặp hay bị nhầm trong quiz và khi làm việc thật:
+
+cd ↔ Set-Location (KHÔNG phải Get-Location! Get-Location = pwd, chỉ để xem mình đang ở đâu).
+ls ↔ Get-ChildItem (KHÔNG phải Get-Item. Get-Item lấy đúng một đối tượng theo đường dẫn; Get-ChildItem liệt kê các con bên trong thư mục).
+cat ↔ Get-Content (KHÔNG phải Set-Content. Set-Content = ghi đè nội dung, Add-Content = nối thêm).
+# Equivalent of: ls -la /var/log
+Get-ChildItem -Path C:\Windows\Logs -Force   # -Force also shows hidden items
+
+# Equivalent of: cat notes.txt
+Get-Content -Path .\notes.txt
+
+# Equivalent of: cd C:\Users
+Set-Location -Path C:\Users
+
+# Equivalent of: rm old.txt  (be careful!)
+Remove-Item -Path .\old.txt
+
+# Equivalent of: grep "error" app.log
+Select-String -Pattern "error" -Path .\app.log
+
+4. `ping` và cú lừa `Test-Connection`
+Đây là câu hỏi kinh điển và cũng là một cái bẫy nhỏ. Trong PowerShell trên Windows, khi bạn gõ ping google.com, nó vẫn chạy - nhưng đó là ping.exe, tiện ích cổ điển của Windows, không phải cmdlet PowerShell.
+
+Cmdlet PowerShell “xịn” để kiểm tra kết nối là Test-Connection. Và đúng như quiz nói: PowerShell đặt ping làm một alias (bí danh) trỏ tới Test-Connection trong nhiều môi trường (rõ nhất trên PowerShell 7 và khi ping.exe không có sẵn) - nên gõ ping cũng có thể gọi ra cmdlet này. Điểm khác biệt lớn: Test-Connection trả về object có .Status, .Latency… để bạn lọc và xử lý bằng script, thay vì một cục text.
+# Object-based connectivity test - returns properties you can filter
+Test-Connection -TargetName 8.8.8.8 -Count 4
+
+# Just get a true/false answer (great inside if-statements in scripts)
+Test-Connection -TargetName github.com -Quiet
+5. Pipe object - nơi PowerShell "lật kèo" Bash
+Nhớ băng chuyền “chở hộp đồ có nhãn” ở mục 1 chứ? Đây là lúc nó tỏa sáng. Trong Bash, muốn tìm process ăn nhiều RAM nhất bạn phải ps aux | sort -k4 | tail. Trong PowerShell, bạn thao tác trực tiếp trên thuộc tính object:
+# Top 5 processes by memory - work on real object properties, no text parsing
+Get-Process | Sort-Object -Property WorkingSet -Descending | Select-Object -First 5 Name, WorkingSet
+
+# Find only files larger than 10 MB under the current folder
+Get-ChildItem -Recurse -File | Where-Object { $_.Length -gt 10MB }
+
+
+
 
