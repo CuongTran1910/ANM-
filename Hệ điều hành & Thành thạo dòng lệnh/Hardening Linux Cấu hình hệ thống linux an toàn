@@ -1,1 +1,109 @@
+1. Least Privilege - "chỉ đưa đúng chìa khoá cần dùng"
+
+Hãy tưởng tượng bạn làm phục vụ nhà hàng: bạn cần chìa kho gia vị, nhưng không cần chìa két sắt của chủ quán. Đưa phục vụ chìa két sắt là mời gọi rắc rối. Nguyên tắc least privilege (đặc quyền tối thiểu) đúng thế: mỗi user/tiến trình chỉ nên có đủ quyền làm việc của nó, không hơn.
+
+Trên Linux, quyền gắn với file theo mô hình owner / group / others, mỗi nhóm có 3 bit r/w/x (read/write/execute). Vì thế chmod và chown là hai công cụ hardening nền tảng.
+| **Lệnh** | **Việc nó làm**                                       | **Ví dụ**              | **Nhớ nhanh**            |
+| -------- | ----------------------------------------------------- | ---------------------- | ------------------------ |
+| `chmod`  | Đổi **quyền** truy cập `r/w/x`                        | `chmod 600 id_rsa`     | **ch**ange **mod**e      |
+| `chown`  | Đổi **chủ sở hữu** của file/thư mục                   | `chown alice file.txt` | **ch**ange **own**er     |
+| `chgrp`  | Đổi **nhóm sở hữu**                                   | `chgrp devs file.txt`  | **ch**ange **gr**ou**p** |
+| `umask`  | Thiết lập **quyền mặc định** khi tạo file/thư mục mới | `umask 027`            | Mask = “chặn bớt” quyền  |
+
+# Show current permissions of a file
+ls -l secret.txt
+# -rw-r--r-- 1 alice alice 42 Aug 13 10:00 secret.txt
+#  ^owner ^group ^others
+
+# chmod: only owner can read/write the private key (600 = rw- --- ---)
+chmod 600 ~/.ssh/id_rsa            # protect the SSH private key
+
+# chown: change owner to 'alice' and group to 'devs'
+sudo chown alice:devs report.csv  # change owner and group
+
+# Octal: r=4, w=2, x=1 → 750 = rwx r-x --- (owner runs, group reads)
+chmod 750 deploy.sh               # script only owner can execute
+2.Siết SSH - cánh cửa hay bị gõ nhất
+SSH là cửa chính để quản trị server từ xa, nên cũng là mục tiêu số một. Cứ dựng server public lên là vài phút sau có bot thử root/123456, root/password… liên tục - như để cửa mở kèm biển “chủ nhà tên root, mật khẩu dễ đoán”.
+
+Ba biện pháp siết SSH quan trọng nhất (file /etc/ssh/sshd_config):
+| **Thiết lập**            | **Giá trị nên đặt** | **Vì sao**                                                                                                         |
+| ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `PermitRootLogin`        | `no`                | Buộc đăng nhập bằng user thường rồi dùng `sudo`, giúp dễ giám sát hơn và giảm rủi ro đăng nhập trực tiếp bằng root |
+| `PasswordAuthentication` | `no`                | Chỉ cho đăng nhập bằng SSH key, giảm nguy cơ brute-force mật khẩu                                                  |
+| `Port`                   | Đổi khỏi `22`       | Giảm bớt bot tự động quét cổng SSH mặc định; **không phải biện pháp bảo mật chính**                                |
+# 1) Generate an SSH key pair ON YOUR MACHINE (not on the server)
+ssh-keygen -t ed25519 -C "you@example.com"   # ed25519: modern, strong, fast
+
+# 2) Copy the public key to the server (safe, never exposes the private key)
+ssh-copy-id alice@your-server-ip
+
+# 3) On the SERVER, edit the SSH configuration
+sudo nano /etc/ssh/sshd_config
+
+Nội dung cần đặt trong sshd_config:
+# --- SSH hardening (comments in English per convention) ---
+PermitRootLogin no            # block direct root login (key hardening step)
+PasswordAuthentication no     # keys only, no brute-forceable passwords
+PubkeyAuthentication yes      # enable public key auth
+MaxAuthTries 3                # limit login attempts per connection
+
+# 4) Validate the syntax, then restart the SSH service
+sudo sshd -t                  # validate config before applying
+sudo systemctl restart ssh    # apply the new configuration
+
+3. Chính sách mật khẩu mạnh
+Kể cả khi ưu tiên SSH key, hệ thống vẫn có mật khẩu (cho sudo, console). Một mật khẩu 6 ký tự toàn số như 123456 thì máy dò xong trước khi bạn uống hết ly trà sữa. Chuẩn hiện đại (NIST, CIS Benchmark) khuyên: độ dài quan trọng hơn độ phức tạp rối rắm, mức nền tối thiểu nên là ≥ 12 ký tự có độ phức tạp.
+
+Trên Ubuntu/Debian, dùng module pam_pwquality để cưỡng chế
+# Install the password-quality checking tool
+sudo apt update && sudo apt install libpam-pwquality -y
+
+# Edit the policy
+sudo nano /etc/security/pwquality.conf
+
+# Password policy (>= 12 chars with complexity)
+minlen = 12        # minimum length: 12 characters
+minclass = 3       # require >= 3 of: lower, upper, digit, special
+
+| **Chính sách**                | **Đánh giá**   | **Vì sao**                                                    |
+| ----------------------------- | -------------- | ------------------------------------------------------------- |
+| Tối thiểu 12 ký tự + phức tạp | ✅ **Tốt nhất** | Không gian dò lớn hơn nhiều, khó brute-force hơn              |
+| Tối đa 6 ký tự                | ❌ Rất yếu      | Mật khẩu quá ngắn, dễ bị dò                                   |
+| Không yêu cầu mật khẩu        | ❌ Nguy hiểm    | Người khác có thể truy cập mà không cần xác thực              |
+| Chỉ dùng số                   | ❌ Yếu          | Chỉ có 10 khả năng cho mỗi vị trí nên không gian mật khẩu nhỏ |
+4. Tắt dịch vụ thừa & cập nhật bản vá
+Mỗi dịch vụ đang chạy = một cánh cửa tiềm năng. Server web có cần dịch vụ chia sẻ file cũ kỹ mở cổng ra Internet không? Chắc là không. Tắt cái gì không dùng - cách giảm bề mặt tấn công (attack surface) hiệu quả nhất.
+
+# List running (listening) services and the ports they open
+ss -tulpn                       # show listening TCP/UDP ports + process
+
+# Check a service, then stop it AND prevent it from auto-starting
+systemctl status cups           # example: printing service, rarely needed on a server
+sudo systemctl disable --now cups   # stop now AND prevent auto-start on boot
+
+Song song, cập nhật bản vá là biện pháp hardening quan trọng bậc nhất nhưng hay bị lười. Phần lớn vụ hack là do khai thác lỗ hổng đã có bản vá mà nạn nhân chưa cài.
+# Update the package list and upgrade packages that have security fixes
+sudo apt update && sudo apt upgrade -y   # patch known vulnerabilities
+
+# Enable AUTOMATIC security updates (highly recommended for servers)
+sudo apt install unattended-upgrades -y && sudo dpkg-reconfigure unattended-upgrades
+
+5. Dựng tường lửa (firewall)
+Tường lửa là bảo vệ đứng ở cổng: chỉ cho qua kết nối bạn cho phép, chặn phần còn lại. Trên Ubuntu, ufw (Uncomplicated Firewall) là lớp vỏ dễ dùng bọc quanh iptables.
+# Default policy: deny all inbound, allow outbound
+sudo ufw default deny incoming    # deny all incoming by default (whitelist model)
+sudo ufw default allow outgoing   # allow the server to reach out
+
+# Open only the ports you actually need: SSH and web
+sudo ufw allow 22/tcp             # SSH (adjust if you changed the port)
+sudo ufw allow 80,443/tcp         # HTTP + HTTPS for a web server
+
+sudo ufw enable                   # turn the firewall on
+sudo ufw status verbose           # verify the ruleset
+
+
+
+
+
 
