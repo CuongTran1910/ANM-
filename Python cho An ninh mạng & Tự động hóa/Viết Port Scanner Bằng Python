@@ -1,1 +1,95 @@
+1. Cổng là gì? Nhìn lại nhanh trước khi code
+Analogy: một địa chỉ IP giống như địa chỉ tòa nhà (số nhà, tên đường), còn cổng giống như số phòng trong tòa nhà đó. Bạn không chỉ gửi thư “tới tòa nhà” — bạn gửi tới “phòng 80” (web HTTP), “phòng 443” (web HTTPS), “phòng 22” (SSH). Máy đích nhìn số phòng để biết chuyển gói tin cho dịch vụ nào.
+
+Cổng là số 16-bit, chạy từ 0 tới 65535. Một vài cổng “quen mặt”:
+| **Cổng** | **Dịch vụ** | **Ghi chú**                                                        |
+| -------: | ----------- | ------------------------------------------------------------------ |
+|   **21** | FTP         | Truyền file; giao thức cũ, mặc định không mã hóa nội dung/xác thực |
+|   **22** | SSH         | Đăng nhập và quản trị từ xa an toàn                                |
+|   **80** | HTTP        | Truy cập web không mã hóa                                          |
+|  **443** | HTTPS       | Truy cập web có mã hóa bằng TLS                                    |
+| **3306** | MySQL       | Dịch vụ cơ sở dữ liệu MySQL                                        |
+| **3389** | RDP         | Remote Desktop trên Windows                                        |
+
+Khi quét, mỗi cổng có thể ở một trong ba trạng thái:
+| **Trạng thái** | **Ý nghĩa (ví dụ cửa phòng)**                           | **Bạn thấy gì**                       |
+| -------------- | ------------------------------------------------------- | ------------------------------------- |
+| **Open**       | Cửa mở, có người trực                                   | Kết nối TCP thành công                |
+| **Closed**     | Có cửa nhưng đang khóa, không có dịch vụ lắng nghe      | Thường bị từ chối ngay bằng `RST`     |
+| **Filtered**   | Có tường lửa hoặc bộ lọc chặn, khó xác định mở hay đóng | Thường không phản hồi hoặc bị timeout |
+
+2. Vì sao dùng thư viện `socket`?
+Analogy: nếu cổng là số phòng, thì socket chính là cái điện thoại nội bộ để bạn gọi tới đúng phòng đó. Trong Python, socket là thư viện chuẩn (built-in, không cần cài thêm) cho phép bạn mở kết nối mạng cấp thấp — đúng thứ ta cần để “gõ cửa” một cổng TCP.
+
+Các thư viện khác thì không dùng cho việc này: os để tương tác hệ điều hành, sys để xử lý tham số/thoát chương trình, time để đo thời gian — không cái nào tạo được kết nối TCP.
+import socket
+
+# Create a TCP socket:
+#   AF_INET  = IPv4 addressing
+#   SOCK_STREAM = TCP (reliable, connection-oriented)
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+# Always set a timeout so the scan does not hang on filtered ports
+s.settimeout(1.0)  # seconds
+3. Quét một cổng: `connect_ex()` là ngôi sao
+Bây giờ ta thử gõ cửa một cổng duy nhất. Có hai cách gọi kết nối:
+| **Phương thức** | **Khi kết nối thất bại**                                                | **Phù hợp để quét?**                                                 |
+| --------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `connect()`     | Thường **ném exception** như `ConnectionRefusedError`, `socket.timeout` | Ít tiện hơn vì phải xử lý bằng `try/except`                          |
+| `connect_ex()`  | **Trả về mã lỗi** dạng số nguyên; `0` = kết nối thành công              | ✅ Phù hợp hơn vì xử lý gọn, không ném exception khi kết nối thất bại |
+Analogy: connect() giống người bạn dễ nổi cáu — cửa khóa là hét toáng lên (ngoại lệ). Còn connect_ex() là người điềm tĩnh — cửa khóa thì lặng lẽ ghi vào sổ “mã lỗi 111” rồi đi tiếp. Khi quét hàng loạt cổng, bạn muốn kiểu điềm tĩnh để vòng lặp không bị gián đoạn.
+import socket
+
+target = "scanme.nmap.org"   # legal target provided by the Nmap project
+port = 80
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.settimeout(1.0)
+
+# connect_ex returns 0 if the port is OPEN, or an error code otherwise
+result = s.connect_ex((target, port))
+if result == 0:
+    print(f"[+] Cổng {port} đang MỞ")
+else:
+    print(f"[-] Cổng {port} đóng hoặc bị lọc (mã {result})")
+
+s.close()   # always release the socket
+4. Quét nhiều cổng: vòng lặp `for` cứu bạn
+Câu hỏi cốt lõi: quét 100 cổng thì viết 100 khối if à? Tất nhiên là không. Cách đúng là dùng vòng lặp for để duyệt qua một danh sách (hoặc một dải) cổng. Đây là điểm mấu chốt của mọi máy quét cổng: một mảnh logic “gõ cửa”, lặp đi lặp lại cho từng cổng.
+import socket
+
+def scan_port(target, port, timeout=1.0):
+    """Return True if the TCP port is open, False otherwise."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        # connect_ex == 0 means the handshake succeeded -> port is open
+        return s.connect_ex((target, port)) == 0
+    finally:
+        s.close()   # runs even if an error happens
+
+
+def scan_range(target, start, end):
+    """Loop over a range of ports and report the open ones."""
+    print(f"[*] Đang quét {target} từ cổng {start} đến {end}...")
+    open_ports = []
+    # A single 'for' loop handles every port -- no repeated if-blocks
+    for port in range(start, end + 1):
+        if scan_port(target, port):
+            print(f"[+] Cổng {port} đang MỞ")
+            open_ports.append(port)
+    return open_ports
+
+
+if __name__ == "__main__":
+    host = "scanme.nmap.org"      # legal, public practice target
+    found = scan_range(host, 20, 90)
+    print(f"[*] Hoàn tất. Cổng mở: {found}")
+Ba thành phần bắt buộc của một máy quét cổng cơ bản, đều xuất hiện ở trên:
+
+Tạo socket và kết nối tới IP (socket.socket(...) + connect_ex((target, port))).
+Vòng lặp duyệt danh sách cổng (for port in range(...)).
+Xác định trạng thái cổng dựa trên kết quả kết nối (== 0 → mở).
+
+
 
