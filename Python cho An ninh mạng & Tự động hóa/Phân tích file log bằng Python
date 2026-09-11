@@ -1,1 +1,28 @@
+1. File log là gì và trông ra sao?
+
+Trước khi phân tích, ta phải hiểu “nguyên liệu”. Hãy coi file log như cuốn sổ của quán cà phê: mỗi dòng là một lượt khách, ghi rõ giờ vào, gọi món gì, trả tiền hay chưa. Mỗi hệ thống có “giọng văn” ghi sổ riêng — gọi là định dạng log.
+Dưới đây là vài định dạng phổ biến bạn sẽ gặp:
+| **Loại log**           | **Ví dụ 1 dòng**                                                                   | **Thông tin hữu ích**                               |
+| ---------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **Web (Apache/Nginx)** | `192.168.1.10 - - [12/Aug/2026:10:15:32 +0700] "GET /admin HTTP/1.1" 404 512`      | IP, thời gian, đường dẫn, mã HTTP                   |
+| **SSH (`auth.log`)**   | `Aug 12 10:15:33 srv sshd[2011]: Failed password for root from 10.0.0.5 port 4444` | User, trạng thái đăng nhập lỗi, IP nguồn            |
+| **App tự viết**        | `2026-08-12 10:15:34 ERROR Database connection timeout`                            | Thời gian, mức độ lỗi (`ERROR`), nội dung thông báo |
+
+2. Mở và đọc file log an toàn với Python
+Trong Python, để mở một file ta dùng hàm open(). Đây là câu trả lời cho câu hỏi kinh điển “hàm nào mở file để đọc?” — không phải read(), file() hay load(), mà là open().
+
+open() nhận hai tham số quan trọng: tên file và mode (chế độ). Để chỉ đọc, ta dùng mode 'r' (read).
+| **Mode** | **Ý nghĩa**       | **Dùng khi**                                          |
+| -------- | ----------------- | ----------------------------------------------------- |
+| `'r'`    | Read — chỉ đọc    | Phân tích log, an toàn vì không sửa nội dung file     |
+| `'w'`    | Write — ghi đè    | Khi muốn ghi mới hoàn toàn; ⚠️ nội dung cũ sẽ bị xóa  |
+| `'a'`    | Append — ghi thêm | Khi muốn thêm dữ liệu vào cuối file                   |
+| `'x'`    | Create — tạo mới  | Khi muốn tạo file mới; sẽ báo lỗi nếu file đã tồn tại |
+
+Khi phân tích log, ta luôn dùng 'r' để không bao giờ làm hỏng bằng chứng. Và ta bọc trong with ... as f:
+# Open the log file in READ-ONLY mode; 'with' auto-closes it afterwards
+with open("access.log", "r", encoding="utf-8", errors="replace") as f:
+    for line in f:            # Iterate line by line (memory-friendly)
+        line = line.rstrip("\n")   # Remove the trailing newline
+        print(line)
 
