@@ -1,2 +1,103 @@
+1. Banner là gì và socket vào cuộc thế nào?
+Để “gọi điện” tới dịch vụ bằng Python, ta dùng socket - điểm cuối (endpoint) của kết nối mạng, giống điện thoại: tạo máy, bấm số (IP + cổng), gọi, nghe, gác máy.
+| **Khái niệm**      | **Đời thường**                | **Trong Python**        |
+| ------------------ | ----------------------------- | ----------------------- |
+| **Tạo socket**     | Cầm điện thoại lên            | `socket.socket()`       |
+| **Đặt số cần gọi** | Bấm số điện thoại + máy nhánh | `(ip, port)`            |
+| **Gọi**            | Nhấn nút gọi                  | `s.connect((ip, port))` |
+| **Nghe câu chào**  | Nghe tổng đài trả lời         | `s.recv(1024)`          |
+| **Gác máy**        | Đặt điện thoại xuống          | `s.close()`             |
+
+2. Kết nối TCP đầu tiên bằng `socket`
+AF_INET = IPv4; SOCK_STREAM = TCP (dòng dữ liệu tin cậy, có bắt tay). Đây là bộ đôi kinh điển cho hầu hết dịch vụ.
+
+import socket
+
+# AF_INET = IPv4, SOCK_STREAM = TCP (reliable, connection-oriented)
+target = "scanme.nmap.org"   # legal test host provided by Nmap project
+port = 22                    # SSH usually greets us with a banner
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.settimeout(3)              # never hang forever: give up after 3 seconds
+s.connect((target, port))   # dial the number: IP + port as a tuple
+
+# Receive up to 1024 bytes of the greeting the service sends
+banner = s.recv(1024)
+print("Banner nhận được:", banner.decode(errors="ignore").strip())
+
+s.close()                   # always hang up when done
+
+3. Làm cho công cụ "cứng cáp": timeout và try/except
+Analogy: Bạn gọi điện mà đầu dây không bắt máy - đâu thể cầm ống nghe chờ tới sáng, nên đặt “gọi 15 giây không nghe thì cúp”. settimeout() chính là cái đó cho socket. Không có nó, script có thể treo vĩnh viễn khi gặp cổng lọc gói (firewall im lặng).
+
+Ngoài ra, đủ thứ có thể sai: máy đích không tồn tại, cổng đóng, mạng rớt… Nếu không bắt ngoại lệ, script sẽ crash ngay ở cổng đầu tiên gặp lỗi. Ta bọc try/except để xử lý mượt mà.
+import socket
+
+def grab_banner(host, port, timeout=3):
+    """Return banner string for host:port, or None on any failure."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)          # avoid hanging on filtered ports
+        s.connect((host, port))
+        banner = s.recv(1024)
+        return banner.decode(errors="ignore").strip()
+    except socket.timeout:
+        return None                     # port filtered or service silent
+    except (ConnectionRefusedError, OSError):
+        return None                     # port closed or host unreachable
+    finally:
+        # `finally` runs even if an exception happened: always release socket
+        try:
+            s.close()
+        except Exception:
+            pass
+
+4. Không phải dịch vụ nào cũng "chào" trước - xử lý HTTP
+Đây là chỗ nhiều người mới vấp: bạn kết nối cổng 80 (web), gọi recv()… và không nhận được gì. Vì HTTP là dịch vụ “khách nói trước”: nó im lặng chờ bạn gửi request rồi mới trả lời, khác với SSH/FTP luôn chào trước. Giống thư viện im ắng - bạn phải hỏi thủ thư trước thì mới được trả lời.
+
+Vậy với HTTP, ta phải gửi một request tối thiểu trước khi đọc:
+
+# For HTTP we must SEND a request first, then recv the response headers.
+# \r\n\r\n ends the HTTP header block; "Connection: close" makes server hang up.
+request = f"HEAD / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+s.send(request.encode())     # HTTP is a "client speaks first" protocol
+response = s.recv(2048)      # now the "Server:" header reveals web server + version
+
+5. Ghép lại: banner grabber quét nhiều cổng
+import socket
+
+def grab_banner(host, port, timeout=3):
+    """Grab a banner from host:port. Passive read first, HTTP nudge as fallback."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((host, port))
+        try:
+            banner = s.recv(1024)      # SSH/FTP/SMTP greet first
+        except socket.timeout:
+            banner = b""               # silent service, fall through to nudge
+        if not banner:
+            # Silent service (e.g. HTTP): prompt it, then read again
+            s.send(f"HEAD / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n".encode())
+            banner = s.recv(1024)
+        return banner.decode(errors="ignore").strip()
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        return None
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+if __name__ == "__main__":
+    host = "scanme.nmap.org"          # legal test target
+    common_ports = [21, 22, 25, 80, 443, 3306]
+    print(f"Đang thu thập banner của {host} ...")
+    for port in common_ports:
+        banner = grab_banner(host, port)
+        if banner:
+            print(f"[+] Cổng {port} mở - Banner: {banner.splitlines()[0]}")
+        else:
+            print(f"[-] Cổng {port}: không có banner / đóng / bị lọc")
 
 
