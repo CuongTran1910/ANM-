@@ -25,4 +25,86 @@ with open("access.log", "r", encoding="utf-8", errors="replace") as f:
     for line in f:            # Iterate line by line (memory-friendly)
         line = line.rstrip("\n")   # Remove the trailing newline
         print(line)
+Tại sao lại with? Hãy nghĩ đến việc mượn sách thư viện: mượn thì phải trả. Nếu mở file mà quên đóng (f.close()), file vẫn bị “giữ” — rò rỉ tài nguyên, hệ thống lớn sẽ hết “hạn ngạch file”. Câu lệnh with open(...) as f: tự động đóng file ngay cả khi code bên trong ném lỗi. Đây là lý do ta luôn nên dùng nó.
+
+3. Trích xuất thông tin với module `re` (regex)
+Bây giờ tới phần “phép thuật”. Mỗi dòng log là một chuỗi dài, và ta muốn bóc ra đúng phần cần (IP, mã HTTP…). Cách thủ công là split() theo khoảng trắng, nhưng nó gãy ngay khi log có dấu ngoặc kép, ngoặc vuông lộn xộn.
+
+Giải pháp chuẩn là regular expression (regex) — một “ngôn ngữ mô tả mẫu chuỗi”. Regex giống như bộ lọc cà phê 🎯: bạn thiết kế cái lọc đúng hình dạng, đổ cả xô chữ vào, và chỉ giữ lại đúng thứ cần. Trong Python, regex nằm ở module tên re — để tìm mẫu trong mỗi dòng, dùng re, không phải os, sys hay json.
+Vài ký hiệu regex cốt lõi:
+| **Ký hiệu** | **Khớp với**             | **Ví dụ**                                 |
+| ----------- | ------------------------ | ----------------------------------------- |
+| `\d`        | Một chữ số từ `0-9`      | `\d\d\d` khớp với `404`                   |
+| `+`         | Một hoặc nhiều lần       | `\d+` khớp với `12345`                    |
+| `.`         | Một ký tự bất kỳ         | `a.c` có thể khớp với `abc`               |
+| `\s`        | Một ký tự khoảng trắng   | `a\sb` khớp với `a b`                     |
+| `( )`       | Nhóm bắt (capture group) | Dùng để lấy riêng phần nằm trong ngoặc    |
+| `\.`        | Dấu chấm thật            | Thường dùng khi viết regex cho địa chỉ IP |
+Ví dụ trích xuất IP + mã trạng thái HTTP từ log web:
+import re
+
+# Group 1: IPv4 address at the start of the line
+# Group 2: 3-digit HTTP status code (e.g. 404, 200)
+pattern = re.compile(r'^(\d{1,3}(?:\.\d{1,3}){3}).*?"\s(\d{3})\s')
+
+log_line = '192.168.1.10 - - [12/Aug/2026:10:15:32 +0700] "GET /admin HTTP/1.1" 404 512'
+
+match = pattern.search(log_line)   # search() scans anywhere in the line
+if match:
+    ip = match.group(1)            # -> "192.168.1.10"
+    status = match.group(2)        # -> "404"
+    print(f"IP {ip} nhận mã trạng thái {status}")
+Ở đây re.compile() biên dịch mẫu một lần để tái dùng nhanh; match.group(1) lấy phần trong cặp ngoặc đầu tiên. Nếu dòng không khớp, search() trả None → luôn kiểm if match: trước khi lấy group (bỏ qua bước này là lỗi kinh điển AttributeError: 'NoneType').
+
+4. Đếm sự kiện với `collections.Counter`
+
+Trích xuất được rồi, câu hỏi tiếp theo của nhà phân tích luôn là: “cái gì xuất hiện nhiều bất thường?”. Ví dụ: một IP gọi 5.000 request trong 1 phút → nghi vấn quét/tấn công. “Đếm số lần xuất hiện” chính là bước lõi.
+
+Python có sẵn công cụ đếm siêu tiện: Counter, như cái máy đếm phiếu bầu — cứ đưa từng lá phiếu (IP) vào, nó tự cộng dồn.
+import re
+from collections import Counter
+
+ip_pattern = re.compile(r'^(\d{1,3}(?:\.\d{1,3}){3})')
+ip_counter = Counter()             # Empty tally board
+
+with open("access.log", "r", encoding="utf-8", errors="replace") as f:
+    for line in f:
+        m = ip_pattern.search(line)
+        if m:
+            ip_counter[m.group(1)] += 1   # Add one vote for this IP
+
+# Show the 5 noisiest IPs
+for ip, count in ip_counter.most_common(5):
+    print(f"{ip} -> {count} request")
+
+5. Ghép lại thành một bộ dò tấn công mini
+Giờ ráp mọi mảnh thành script phát hiện brute-force SSH — kịch bản kẻ tấn công thử password liên tục. Dấu hiệu: nhiều dòng Failed password ... from <IP> cùng một IP.
+import re
+from collections import Counter
+
+# Capture the source IP in every "Failed password" line
+fail_pattern = re.compile(r'Failed password.*from (\d{1,3}(?:\.\d{1,3}){3})')
+failed_by_ip = Counter()
+
+with open("auth.log", "r", encoding="utf-8", errors="replace") as f:
+    for line in f:
+        m = fail_pattern.search(line)
+        if m:
+            failed_by_ip[m.group(1)] += 1
+
+THRESHOLD = 10                       # More than 10 fails => suspicious
+print("Cac IP nghi ngo brute-force:")   # (see note below on diacritics)
+for ip, count in failed_by_ip.items():
+    if count > THRESHOLD:
+        print(f"  [!] {ip}: {count} lan dang nhap that bai")
+
+(Lưu ý: trong terminal thật bạn nên in tiếng Việt có dấu, ví dụ "Các IP nghi ngờ brute-force:" và "lần đăng nhập thất bại"; ở đây giữ ASCII trong khối minh họa để tránh lỗi font khi copy vào một số môi trường lab cũ.)
+
+Chỉ khoảng 12 dòng, bạn đã có công cụ mà quản trị viên dùng hằng ngày — “hạt giống” của các hệ thống lớn như fail2ban.
+
+
+
+
+
+
 
