@@ -1,1 +1,46 @@
+1. Cài đặt và request đầu tiên
+requests không có sẵn trong Python chuẩn nên phải cài. Cách gọn nhất là dùng pip trong một virtual environment.
+# Create and activate a virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate        # On Windows: venv\Scripts\activate
+
+# Install the requests library
+pip install requests
+
+Giờ gửi request GET đầu tiên. GET giống việc “xem menu” — bạn chỉ lấy thông tin, không thay đổi gì trên server.
+import requests
+
+# Send a GET request to a safe testing API
+response = requests.get("https://httpbin.org/get")
+
+# The three things you'll check most often
+print(response.status_code)   # e.g. 200 -> success
+print(response.headers["Content-Type"])
+print(response.text[:120])    # First 120 chars of the raw body
+
+2. Đọc phản hồi: status_code, text, json()
+| **Thuộc tính / method** | **Trả về gì**                                   | **Khi nào dùng**                                        |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------- |
+| `response.status_code`  | Số nguyên như `200`, `404`, `500`               | Kiểm tra request thành công hay thất bại                |
+| `response.text`         | Nội dung body dạng chuỗi (`str`)                | Đọc HTML hoặc văn bản thô                               |
+| `response.json()`       | Body được parse thành `dict` hoặc `list` Python | Khi API trả dữ liệu JSON                                |
+| `response.headers`      | Các header phản hồi dạng dictionary-like object | Xem `Server`, `Content-Type`, cookie và các header khác |
+Analogy: status_code là nét mặt người phục vụ (200 = cười tươi “xong rồi”, 404 = “món này hết”, 500 = “bếp cháy”). .json() là bóc hộp món ăn đã đóng gói gọn gàng ra thành nguyên liệu Python dùng được ngay.
+
+import requests
+
+response = requests.get("https://jsonplaceholder.typicode.com/users/1")
+
+# ALWAYS check the status code before trusting the body
+if response.status_code == 200:
+    data = response.json()          # Parse JSON body into a Python dict
+    print("Name:", data["name"])
+    print("Email:", data["email"])
+    print("City:", data["address"]["city"])
+else:
+    print(f"Request failed with status {response.status_code}")
+Ba nhóm status code cần thuộc lòng:
+
+
+
 
