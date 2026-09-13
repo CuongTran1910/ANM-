@@ -1,1 +1,142 @@
+1. Vì sao phải tự động hóa? (Con người vs. Script)
+| **Tiêu chí**         | **Làm thủ công**                             | **Dùng script Python**                           |
+| -------------------- | -------------------------------------------- | ------------------------------------------------ |
+| **Tốc độ**           | Chậm, có thể mất vài phút cho mỗi user       | Nhanh, có thể xử lý trong mili-giây đến vài giây |
+| **Tính nhất quán**   | Dễ lệch vì mỗi lần thao tác có thể khác nhau | Đồng đều vì script chạy theo cùng một logic      |
+| **Sai sót**          | Cao hơn, dễ gõ nhầm hoặc quên bước           | Thấp hơn nếu code được viết và kiểm tra đúng     |
+| **Khả năng lặp lại** | Khó tái tạo chính xác                        | Có thể chạy lại nhiều lần với cùng quy trình     |
+| **Audit / ghi vết**  | Khó theo dõi đầy đủ                          | Dễ ghi log lại script đã                         |
+
+2. `subprocess` - cây cầu nối Python với dòng lệnh Linux
+
+Python không có sẵn lệnh “tạo user Linux”. Cách đúng là nhờ Python gọi hộ lệnh hệ thống useradd. Module làm việc này là subprocess - hãy coi nó như một trợ lý: bạn đưa cho nó một lệnh shell, nó chạy giùm rồi báo lại kết quả (thành công hay lỗi).
+Đừng nhầm subprocess với các module khác nhé:
+| **Module**   | **Dùng để làm gì**                                            |
+| ------------ | ------------------------------------------------------------- |
+| `subprocess` | **Chạy lệnh hoặc chương trình bên ngoài** như `useradd`, `ls` |
+| `requests`   | Gửi HTTP request đến website hoặc API                         |
+| `socket`     | Giao tiếp mạng cấp thấp qua TCP/UDP                           |
+| `re`         | Xử lý **biểu thức chính quy (regex)** trên chuỗi              |
+
+Ví dụ tạo một user tên newbie:
+import subprocess
+
+# Run "useradd -m newbie": -m creates a home directory for the user
+result = subprocess.run(
+    ["sudo", "useradd", "-m", "newbie"],
+    capture_output=True,  # Capture stdout/stderr instead of printing
+    text=True,            # Return output as str, not bytes
+    check=False           # Don't raise on non-zero exit; we handle it ourselves
+)
+
+if result.returncode == 0:
+    print("Đã tạo user newbie thành công.")
+else:
+    # useradd writes errors to stderr (e.g. user already exists)
+    print(f"Lỗi khi tạo user: {result.stderr.strip()}")
+
+3. Đặt mật khẩu an toàn với `chpasswd`
+
+Tạo user xong thì phải có mật khẩu. Sai lầm phổ biến của người mới là nhét mật khẩu thẳng vào script (hardcode) hoặc dùng chung một mật khẩu cho tất cả. Điều này giống như phát cho cả công ty cùng một chiếc chìa khóa - mất một cái là mất hết.
+
+Cách an toàn: sinh mật khẩu ngẫu nhiên cho mỗi user, đưa vào lệnh chpasswd qua stdin (không hiện trên màn hình, không lưu ra file log), và tuyệt đối không ghi mật khẩu plaintext vào log.
+import subprocess
+import secrets
+import string
+
+def generate_password(length: int = 16) -> str:
+    """Create a cryptographically strong random password."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    # secrets is designed for security-sensitive randomness (not random!)
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+def set_password(username: str, password: str) -> None:
+    """Set a user's password via chpasswd, feeding data through stdin."""
+    # chpasswd reads "username:password" lines from stdin
+    subprocess.run(
+        ["sudo", "chpasswd"],
+        input=f"{username}:{password}",
+        text=True,
+        check=True  # Raise CalledProcessError if it fails
+    )
+
+4. Ghép lại: tạo user hàng loạt từ file
+Giờ ta gộp mọi mảnh thành một script hoàn chỉnh: đọc danh sách user từ file CSV, kiểm tra user đã tồn tại chưa (tránh lỗi), tạo user, đặt mật khẩu ngẫu nhiên. Coi file CSV như một “danh sách khách mời”, còn script là “lễ tân” phát thẻ cho từng người.
+
+File users.csv:
+username,fullname
+alice,Alice Nguyen
+bob,Bob Tran
+charlie,Charlie Le
+
+Script create_users.py:
+import csv
+import subprocess
+import secrets
+import string
+
+def generate_password(length: int = 16) -> str:
+    """Create a cryptographically strong random password."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+def user_exists(username: str) -> bool:
+    """Return True if the account already exists in /etc/passwd."""
+    # "id <user>" exits 0 if the user exists, non-zero otherwise
+    result = subprocess.run(
+        ["id", username],
+        capture_output=True, text=True, check=False
+    )
+    return result.returncode == 0
+
+def create_user(username: str, fullname: str) -> None:
+    """Create a Linux user with a home dir and a random password."""
+    if user_exists(username):
+        print(f"[SKIP] User '{username}' đã tồn tại, bỏ qua.")
+        return
+
+    # -m: create home directory, -c: comment (full name)
+    subprocess.run(
+        ["sudo", "useradd", "-m", "-c", fullname, username],
+        check=True
+    )
+
+    password = generate_password()
+    subprocess.run(
+        ["sudo", "chpasswd"],
+        input=f"{username}:{password}", text=True, check=True
+    )
+    # In production, deliver this password over a secure channel,
+    # never write it to a plaintext log file.
+    print(f"[OK] Đã tạo user '{username}'.")
+
+def main() -> None:
+    with open("users.csv", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                create_user(row["username"], row["fullname"])
+            except subprocess.CalledProcessError as e:
+                # One failure should not abort the whole batch
+                print(f"[ERROR] Không tạo được '{row['username']}': {e}")
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
