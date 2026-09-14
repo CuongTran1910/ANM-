@@ -41,6 +41,56 @@ else:
     print(f"Request failed with status {response.status_code}")
 Ba nhóm status code cần thuộc lòng:
 
+3. Truyền tham số: params, data, json
+| **Tham sốĐi vào đâuDùng choVí dụ kết quả** |                           |                        |                       |
+| ------------------------------------------ | ------------------------- | ---------------------- | --------------------- |
+| `params=`                                  | Query string trên URL     | Lọc/tìm kiếm GET       | `?q=admin&limit=10`   |
+| `data=`                                    | Body dạng form-urlencoded | Form HTML truyền thống | `user=alice&pass=123` |
+| `json=`                                    | Body dạng JSON            | REST API hiện đại      | `{"user":"alice"}`    |
+
+import requests
+
+# 1) params= -> becomes the URL query string
+r1 = requests.get("https://httpbin.org/get", params={"q": "admin", "limit": 10})
+print(r1.url)   # https://httpbin.org/get?q=admin&limit=10
+
+# 2) data= -> form-encoded body (Content-Type: application/x-www-form-urlencoded)
+r2 = requests.post("https://httpbin.org/post", data={"user": "alice", "role": "tester"})
+
+# 3) json= -> JSON body, and requests sets Content-Type: application/json for you
+r3 = requests.post("https://httpbin.org/post", json={"user": "alice", "role": "tester"})
+print(r3.json()["json"])   # httpbin echoes back the JSON we sent
+
+4. Header, User-Agent và Authorization
+
+Header là “ghi chú bên lề” gửi kèm request: bạn là ai, chấp nhận định dạng gì, có token đăng nhập không. Trong pentest, đổi User-Agent là mẹo cơ bản để né bộ lọc chặn theo tên công cụ (nhiều WAF chặn thẳng UA mặc định python-requests/2.x).
+import requests
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (SecLab; research)",   # Mimic a browser
+    "Accept": "application/json",
+    "Authorization": "Bearer eyJhbGciOi...",          # API token goes in a header, NOT the URL
+}
+
+response = requests.get("https://httpbin.org/headers", headers=headers)
+print(response.json()["headers"])   # See exactly what the server received
+
+5. Session, timeout và tải file
+Mỗi lần gọi requests.get() là một kết nối “một lần rồi thôi”, không nhớ gì. Khi cần đăng nhập rồi gọi tiếp nhiều endpoint (giữ cookie phiên), hãy dùng Session — giống như bạn được cấp một thẻ khách quen: đưa thẻ một lần, những lần sau nhà hàng tự nhận ra bạn.
+import requests
+
+# A Session keeps cookies + headers across multiple requests
+with requests.Session() as s:
+    s.headers.update({"User-Agent": "SecLab-Scanner/1.0"})
+
+    # Step 1: login -> server sets a session cookie, stored automatically
+    s.post("https://httpbin.org/cookies/set/sessionid/abc123")
+
+    # Step 2: the cookie is sent automatically on the next request
+    r = s.get("https://httpbin.org/cookies", timeout=5)   # timeout is in seconds
+    print(r.json())   # {'cookies': {'sessionid': 'abc123'}}
+
+
 
 
 
