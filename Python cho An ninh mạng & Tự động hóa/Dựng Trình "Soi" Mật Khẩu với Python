@@ -1,1 +1,124 @@
+1. Mật khẩu "mạnh" nghĩa là gì? Bốn tiêu chí kinh điển
+Trước khi code, phải định nghĩa rõ “mạnh” - kiểu chấm bài thi thì phải có đáp án. Cách đánh giá cổ điển (hầu hết form đăng ký đang dùng) dựa trên bốn nhóm ký tự:
+| **Tiêu chí**       | **Ý nghĩa**                 | **Ví dụ ký tự** | **Kích thước “kho”** |
+| ------------------ | --------------------------- | --------------- | -------------------: |
+| **Chữ thường**     | Các chữ cái từ `a-z`        | `a b c ... z`   |                   26 |
+| **Chữ hoa**        | Các chữ cái từ `A-Z`        | `A B C ... Z`   |                   26 |
+| **Chữ số**         | Các chữ số từ `0-9`         | `0 1 2 ... 9`   |                   10 |
+| **Ký tự đặc biệt** | Các ký tự như `! @ # $ ...` | `!@#$%^&*`      |          Khoảng `32` |
+
+Mật khẩu càng dùng nhiều nhóm và càng dài thì “không gian” kẻ tấn công phải dò càng lớn. Ổ khóa chỉ có nút 0-9 thì mỗi vị trí dò 10 khả năng; thêm cả chữ, số, ký hiệu thì ~94 - khó hơn hẳn.
+
+2. Bộ đồ nghề: các phương thức chuỗi trong Python
+Python cho sẵn loạt phương thức để “soi” từng ký tự - “cây kéo, cây búa” của mọi công cụ bảo mật Python.
+| **Phương thức / hàm** | **Trả về `True` khi… / Ý nghĩa** | **Ví dụ**                 |
+| --------------------- | -------------------------------- | ------------------------- |
+| `ch.isdigit()`        | Ký tự là **chữ số**              | `'7'.isdigit()` → `True`  |
+| `ch.isalpha()`        | Ký tự là **chữ cái**             | `'a'.isalpha()` → `True`  |
+| `ch.isupper()`        | Ký tự là chữ **in hoa**          | `'A'.isupper()` → `True`  |
+| `ch.islower()`        | Ký tự là chữ **thường**          | `'a'.islower()` → `True`  |
+| `ch.isspace()`        | Ký tự là **khoảng trắng**        | `' '.isspace()` → `True`  |
+| `ch.isalnum()`        | Ký tự là chữ **hoặc** số         | `'!'.isalnum()` → `False` |
+| `len(s)`              | Trả về **số ký tự** của chuỗi    | `len("abc")` → `3`        |
+
+Lưu ý: các phương thức này gọi trên một ký tự. Để biết cả mật khẩu “có chứa ít nhất một chữ số không”, có thể duyệt bằng vòng for + cờ boolean. Nhưng Python có “combo” gọn hơn: any() + generator expression, đọc gần như tiếng Anh “có ký tự nào là chữ số không?”.
+password = "Hello123"
+has_digit = any(ch.isdigit() for ch in password)   # any char is a digit?
+has_upper = any(ch.isupper() for ch in password)   # any uppercase letter?
+has_lower = any(ch.islower() for ch in password)   # any lowercase letter?
+has_special = any(not ch.isalnum() for ch in password)  # any non-alphanumeric?
+print(has_digit, has_upper, has_lower, has_special)
+
+3. Ghép logic: `and`, `or` và bảng chân trị
+Có has_digit, has_upper… rồi, giờ cần ra quyết định - toán tử logic vào cuộc. Nhớ bảng chân trị:
+| **A** | **B** | **A and B** | **A or B** | **not A** |
+| ----- | ----- | ----------- | ---------- | --------- |
+| True  | True  | **True**    | True       | False     |
+| True  | False | **False**   | True       | False     |
+| False | True  | **False**   | True       | True      |
+| False | False | **False**   | False      | True      |
+Điểm mấu chốt: and chỉ cho True khi cả hai vế True, nên True and False là False - “một điều kiện fail là cả bài fail”. Còn or chỉ cần một vế True.
+# Pass the baseline only if long enough AND enough character variety.
+# In Python True counts as 1, so sum() counts how many groups are present.
+length_ok = len(password) >= 8
+variety_count = sum([has_digit, has_upper, has_lower, has_special])
+is_strong_baseline = length_ok and (variety_count >= 3)  # length AND 3+ groups
+print(is_strong_baseline)
+
+4. Đo bằng con số: entropy của mật khẩu
+Bốn tiêu chí trên là “định tính”. Nhưng dân bảo mật thích con số định lượng: entropy, đo bằng bit, trả lời “Kẻ tấn công phải đoán trong bao nhiêu khả năng?”.
+| **Mật khẩu**                   | **Độ dài** | **Pool** | **Entropy** | **Đánh giá** |
+| ------------------------------ | ---------: | -------: | ----------: | ------------ |
+| `1234`                         |          4 |       10 |     ~13 bit | Rất yếu 💀   |
+| `P@ssw0rd`                     |          8 |       94 |     ~52 bit | Trung bình   |
+| `correct horse battery staple` |         28 |      ~27 |   ~133 bit* | Rất mạnh 🛡️ |
+
+5. Ghép tất cả thành trình kiểm tra hoàn chỉnh
+
+import math
+
+def check_password(password):
+    """Analyze a password and return a report dict."""
+    checks = {
+        "length_8":  len(password) >= 8,
+        "has_lower": any(c.islower() for c in password),
+        "has_upper": any(c.isupper() for c in password),
+        "has_digit": any(c.isdigit() for c in password),
+        "has_symbol": any(not c.isalnum() for c in password),
+    }
+
+    # Entropy from the character pool actually used: L * log2(R)
+    pool = 26 * checks["has_lower"] + 26 * checks["has_upper"] \
+         + 10 * checks["has_digit"] + 32 * checks["has_symbol"]
+    entropy = len(password) * math.log2(pool) if pool else 0.0
+
+    # Rating driven mostly by entropy (length-first mindset)
+    if entropy < 40:   rating = "Yếu"
+    elif entropy < 60: rating = "Trung bình"
+    elif entropy < 80: rating = "Mạnh"
+    else:              rating = "Rất mạnh"
+
+    # Suggestions for whatever is missing
+    tips = []
+    if not checks["length_8"]: tips.append("Dùng ít nhất 8 ký tự (càng dài càng tốt).")
+    if not checks["has_digit"]: tips.append("Thêm chữ số.")
+    if not checks["has_symbol"]: tips.append("Thêm ký tự đặc biệt như !@#$.")
+
+    return {"entropy": round(entropy, 1), "rating": rating, "tips": tips}
+
+
+if __name__ == "__main__":
+    pw = input("Nhập mật khẩu cần kiểm tra: ")
+    report = check_password(pw)
+    print(f"Entropy: {report['entropy']} bit -> {report['rating']}")
+    for tip in report["tips"]:
+        print(f"  - Gợi ý: {tip}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
