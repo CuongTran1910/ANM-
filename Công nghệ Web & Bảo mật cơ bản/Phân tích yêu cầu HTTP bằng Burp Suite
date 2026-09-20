@@ -1,1 +1,104 @@
+1.Burp Suite la gi ?
+Tưởng tượng bạn là trọng tài VAR trong bóng đá: bạn xem lại từng pha bóng ở tốc độ chậm, phóng to, phân tích. Burp Suite cho lưu lượng web cũng vậy, nó là một web proxy đánh chặn (intercepting proxy) đóng vai trò trung gian giữa trình duyệt và web server.
+
+Burp Suite gom nhiều công cụ vào một giao diện. Với người mới, ba tab quan trọng nhất là:
+| **TabVai trò chínhAnalogy** |                                                          |                                         |
+| --------------------------- | -------------------------------------------------------- | --------------------------------------- |
+| **Proxy**                   | Chặn, xem, **sửa** yêu cầu/phản hồi khi đang truyền      | Người bồi bàn đọc và sửa thư giữa đường |
+| **Repeater**                | Gửi **lại** một yêu cầu nhiều lần với chỉnh sửa thủ công | Bàn thí nghiệm: đổi 1 biến rồi thử lại  |
+| **Intruder**                | Tự động hóa gửi hàng loạt yêu cầu (fuzzing, brute-force) | Robot bấm thử hàng nghìn mật khẩu       |
+| **Decoder**                 | Mã hóa/giải mã dữ liệu (Base64, URL, hex…)               | Máy dịch mật mã                         |
+
+2. Kiến trúc: Burp ngồi ở đâu?
+Sơ đồ dưới đây cho thấy vị trí của Burp trong luồng dữ liệu:
+   Trình duyệt                Burp Proxy                 Máy chủ web
+  (127.0.0.1)             (127.0.0.1:8080)             (vd DVWA)
+      |                         |                           |
+      |  ---- Yeu cau HTTP --->  |                          |
+      |                         | [Dung lai o Intercept]    |
+      |                         | (Ban xem / sua tai day)   |
+      |                         |  ---- Yeu cau (da sua) --> |
+      |                         |                           |
+      |                         |  <---- Phan hoi ----------  |
+      |  <---- Phan hoi -------  |                           |
+
+3. Cấu hình Proxy và bắt gói HTTPS
+Bước 1, cấu hình trình duyệt trỏ proxy về Burp. Nếu dùng Firefox, vào Settings > Network Settings > Manual proxy configuration, nhập 127.0.0.1 và cổng 8080. Cách nhanh và an toàn hơn là dùng Burp’s Browser (Chromium tích hợp sẵn trong tab Proxy > “Open Browser”), nó đã trỏ proxy sẵn.
+
+Bước 2, đây là chỗ nhiều bạn kẹt: HTTPS. HTTPS được mã hóa, nên nếu Burp chỉ đứng giữa, nó sẽ thấy toàn “ký tự loạn”. Giải pháp: Burp tự tạo một chứng chỉ CA riêng, và bạn cài chứng chỉ đó vào trình duyệt. Sau đó Burp “giả” làm máy chủ với trình duyệt và “giả” làm trình duyệt với máy chủ, giải mã ở giữa để bạn đọc được.
+# Cài chứng chỉ CA của Burp (làm sau khi bật Proxy ở 127.0.0.1:8080)
+# Step 1: open the browser proxied through Burp, then visit:
+#   http://burpsuite   (Burp serves its CA cert download page here)
+# Step 2: download "CA Certificate" -> cacert.der
+# Step 3: import it into the browser's Authorities store, trust it for websites
+# After this, Burp can decrypt HTTPS traffic too.
+
+4. Đọc một yêu cầu HTTP: mổ xẻ từng phần
+Khi bạn bắt được một yêu cầu, Burp hiển thị nó dạng text thô. Ví dụ một yêu cầu đăng nhập điển hình:
+POST /login HTTP/1.1
+Host: lab.example.com
+User-Agent: Mozilla/5.0
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 29
+Cookie: session=abc123
+
+username=admin&password=1234
+
+| **Thành phần** | **Ví dụ** | **Ý nghĩa** |
+|---|---|---|
+| **Method** | `POST` | Hành động muốn thực hiện, ví dụ gửi dữ liệu |
+| **Path** | `/login` | Đường dẫn tới tài nguyên hoặc chức năng trên máy chủ |
+| **Version** | `HTTP/1.1` | Phiên bản giao thức HTTP đang sử dụng |
+| **Header `Host`** | `lab.example.com` | **Tên miền của máy chủ** đích |
+| **Header `Cookie`** | `session=abc123` | Lưu thông tin phiên đăng nhập hoặc trạng thái người dùng |
+| **Body** | `username=admin&password=1234` | Dữ liệu được gửi lên server, ví dụ dữ liệu form |
+
+| **Method** | **Dùng để** | **Phổ biến?** |
+|---|---|---|
+| **GET** | Lấy tài nguyên hoặc dữ liệu | ✅ Rất phổ biến |
+| **POST** | Gửi dữ liệu, ví dụ tạo mới hoặc đăng nhập | ✅ Rất phổ biến |
+| **PUT** | Cập nhật hoặc thay thế toàn bộ tài nguyên | ✅ Phổ biến |
+| **DELETE** | Xóa tài nguyên | ✅ Phổ biến |
+| `SEND` | Không phải phương thức chuẩn của HTTP | ❌ Không phải method HTTP |
+
+5. Intercept: dừng và sửa yêu cầu
+
+Đây là “siêu năng lực” của Burp. Vào Proxy > Intercept, bật nút Intercept is on. Từ giờ, mỗi yêu cầu trình duyệt gửi sẽ bị dừng lại ở Burp, chờ bạn quyết định.
+[Bat Intercept on] -> thao tac tren web (vd bam Login)
+        |
+        v
+  Burp DUNG yeu cau lai  -->  Ban co the:
+        |                       - Sua username/password
+        |                       - Doi header
+        |                       - Doi method GET <-> POST
+        v
+   [Forward] gui tiep  HOAC  [Drop] huy bo
+
+6. Repeater: phòng thí nghiệm gửi lại yêu cầu
+Intercept tốt cho việc chặn “live”, nhưng để thử đi thử lại một yêu cầu (đổi 1 tham số rồi xem phản hồi khác thế nào), bạn cần Repeater.
+
+Cách dùng: trong Proxy > HTTP history, chuột phải một yêu cầu → Send to Repeater. Sang tab Repeater, bạn có ô soạn yêu cầu bên trái, bấm Send, xem phản hồi bên phải. Sửa → Send → so sánh. Lặp lại thoải mái.
+
+# In Repeater: change the id and resend to test IDOR
+GET /account?id=1002 HTTP/1.1
+Host: lab.example.com
+Cookie: session=abc123
+
+# Send -> got user 1002's data? -> possible IDOR vulnerability
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
